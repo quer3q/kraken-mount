@@ -1,10 +1,8 @@
 <p align="center"><img src="docs/logo.png" width="128" alt="Kraken Mount"></p>
 
-A PS5 ELF payload. It finds games on the internal SSD and on USB or extended drives, registers
-each one on the home screen without installing it, and at launch puts the game's fakelib, with
-ampr-emu-ng on top, into the game's sandbox. It reads debug FPKG `.pkg` files made by
-[ps5-dump-forge](https://github.com/quer3q/ps5-dump-forge) and game folders (plain, or packed
-with zstd or LZ4).
+A PS5 ELF payload. It finds games on the internal SSD and on USB or extended drives.
+
+It mounts debug FPKG `.pkg` files, game folders (plain, or packed with zstd or LZ4).
 
 ## How to
 
