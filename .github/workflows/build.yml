@@ -1,0 +1,95 @@
+# Host check (cargo check + UI script syntax), the payload build, and draft releases on v* tags.
+name: build
+
+on:
+  # Every push (any branch or tag) runs the check and the build; only v* tags release.
+  push:
+    branches: ['**']
+    tags: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    env:
+      # Same toolchain as ps5/Dockerfile. The crate builds only for FreeBSD/PS5: no cargo test.
+      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTFLAGS: -Dwarnings
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target x86_64-unknown-freebsd
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: host-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: host-${{ runner.os }}-${{ env.RUSTUP_TOOLCHAIN }}-
+      - name: cargo check --workspace
+        run: cargo check --workspace --locked --target x86_64-unknown-freebsd
+      - name: node --check (src/ui.html script)
+        run: |
+          sed -n '/^<script>$/,/^<\/script>$/p' src/ui.html | sed '1d;$d' > "$RUNNER_TEMP/ui.js"
+          test -s "$RUNNER_TEMP/ui.js"
+          node --check "$RUNNER_TEMP/ui.js"
+
+  payload:
+    name: build payload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            target/ps5/cargo/registry
+            target/ps5/cargo/git
+          key: payload-cargo-${{ hashFiles('Cargo.lock', 'ps5/Dockerfile') }}
+          restore-keys: payload-cargo-
+      - name: ps5/build.sh (Docker)
+        run: ./ps5/build.sh
+      - name: sha256
+        run: |
+          cp target/ps5/kraken-mount.elf .
+          sha256sum kraken-mount.elf | tee SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: payload
+          path: |
+            kraken-mount.elf
+            SHA256SUMS
+          if-no-files-found: error
+
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, payload]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: payload
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          sha256sum -c SHA256SUMS
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --draft \
+            --generate-notes \
+            kraken-mount.elf SHA256SUMS

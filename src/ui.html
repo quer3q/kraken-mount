@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="en" manifest="kraken.appcache">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kraken Mount v__VERSION__</title>
+<style>
+:root {
+  --fg: #f4f4f8;
+  --fg-2: #d6d6e0;
+  --muted: rgba(235, 235, 245, 0.78);
+  --focus: #9db6ff;
+  --accent: #3d6bff;
+  --danger-ink: #ffb0b0;
+  --danger-bg: rgba(255, 70, 70, 0.32);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Frosted glass: a translucent white fill, heavy blur, an inset top highlight, a soft drop shadow. No borders. */
+  --glass: rgba(255, 255, 255, 0.16);
+  --glass-hi: rgba(255, 255, 255, 0.26);
+  --glass-blur: blur(3.2rem) saturate(230%);
+  --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  --glass-drop: 0 0.6rem 2rem rgba(0, 0, 0, 0.35);
+  --gutter: 2.5rem;
+  --gap: 1.5rem;
+}
+/* 16px at 1920 wide: every size below is in rem, so the page scales with the TV. */
+html { font-size: 0.8333vw; }
+@media (max-width: 1100px) { html { font-size: 14px; } }
+@media (min-width: 2600px) { html { font-size: 22px; } }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+/* Only html gets a colour: a body background would paint over the fixed photo layer. */
+html { background: #0b0b12; }
+body {
+  color: var(--fg); font-family: var(--sans); font-size: 1rem;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+[hidden] { display: none !important; }
+h1, h2, h3, p { margin: 0; }
+img { display: block; }
+/* The gamepad photo, dimmed so white glass and text stay readable over it. */
+.bg {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: -1;
+  background: #0b0b12 url(/bg.jpg) center / cover no-repeat;
+}
+.bg:after {
+  content: ""; position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, rgba(8, 8, 16, 0.55), rgba(8, 8, 16, 0.35) 40%, rgba(8, 8, 16, 0.7));
+}
+/* One glass recipe for every surface. */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--glass-drop);
+}
+/* D-pad focus: a ring on every control. Old WebKit drops the :not() rule and keeps it always. */
+:focus { outline: 0.19rem solid var(--focus); outline-offset: 0.19rem; }
+:focus:not(:focus-visible) { outline: none; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.icon { width: 1.15rem; height: 1.15rem; flex: none; }
+button, a.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  height: 2.6rem; padding: 0 1.2rem; border-radius: 999px;
+  border: 0; background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge);
+  color: var(--fg); font: inherit; font-weight: 500; white-space: nowrap; cursor: pointer;
+  text-decoration: none;
+}
+button:hover, a.button:hover { background: var(--glass-hi); }
+button.small { height: 2.2rem; padding: 0 0.95rem; font-size: 0.85rem; gap: 0.4rem; }
+button.primary { background: rgba(255, 255, 255, 0.88); color: #12121a; }
+button.primary:hover { background: #fff; }
+button.danger { background: var(--danger-bg); color: #fff; }
+button.danger:hover { background: rgba(255, 70, 70, 0.48); }
+
+/* ---------- Header: dump-forge's layout (icon, centred tabs, actions), surfaces in glass ---------- */
+.topbar { position: sticky; top: 0; z-index: 5; padding: 1.1rem var(--gutter) 0; }
+.topbar-in {
+  display: -webkit-box; display: flex; align-items: center; justify-content: space-between;
+  height: 3.6rem; gap: 1rem;
+}
+.topbar-in > .brand-row, .topbar-in > .top-actions { -webkit-box-flex: 1; flex: 1 1 0; }
+.brand-row { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+.brand { display: flex; align-items: center; margin: 0; }
+/* The logo's navy square is clipped to its round emblem; the glow melts its edge into the photo. */
+.brand img {
+  width: 3.4rem; height: 3.4rem; border-radius: 50%;
+  box-shadow: 0 0 1.2rem rgba(80, 170, 255, 0.45), 0 0 2.6rem rgba(255, 140, 60, 0.22);
+}
+.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.6rem; }
+/* Segmented pill: the screen tabs. The filter row uses separate chips (below). */
+.seg { display: inline-flex; gap: 0.15rem; padding: 0.25rem; border-radius: 999px; }
+.seg-opt {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+  height: 2.3rem; padding: 0 1.2rem; border: 0; border-radius: 999px;
+  background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none;
+  color: var(--muted); font: inherit; font-size: 0.95rem; font-weight: 500; white-space: nowrap; cursor: pointer;
+}
+.seg-opt:hover { background: rgba(255, 255, 255, 0.08); color: var(--fg); }
+.seg-opt[aria-selected="true"], .seg-opt[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.9); color: #12121a;
+  box-shadow: 0 0.15rem 0.6rem rgba(0, 0, 0, 0.25);
+}
+.nav .seg-opt { min-width: 7.5rem; }
+/* Type filter: each type is its own frosted chip, with a gap between them. */
+.chips { display: flex; align-items: center; gap: 0.6rem; }
+.chips .seg-opt {
+  height: 2.6rem; color: var(--fg); background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), 0 0.4rem 1.2rem rgba(0, 0, 0, 0.25);
+}
+.chips .seg-opt:hover { background: var(--glass-hi); }
+.chips .seg-opt[aria-pressed="true"] { background: rgba(255, 255, 255, 0.9); color: #12121a; }
+.gh-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.6rem; height: 2.6rem; padding: 0; border-radius: 999px; color: var(--fg);
+}
+.gh-link .icon { width: 1.3rem; height: 1.3rem; }
+
+/* ---------- Filter row: L2 [chips] R2 ... storage pill ---------- */
+main { padding: 1.1rem var(--gutter) 2rem; }
+.filters { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.3rem; }
+.seg-wrap { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+/* PS5 L2 / R2 hints: dump-forge's shoulder keycaps, out of the Tab order (the triggers are the binding). */
+button.shoulder {
+  flex: none; width: 2.2rem; height: 1.55rem; padding: 0; margin: 0;
+  border-radius: 0.6rem 0.6rem 0.4rem 0.4rem;
+  color: var(--muted); font: 600 0.78rem var(--mono); letter-spacing: 0.02em;
+}
+button.shoulder:hover { color: var(--fg); }
+.count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.4rem; height: 1.4rem; padding: 0 0.4rem; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16); color: var(--fg); font-size: 0.78rem; font-weight: 600;
+}
+.seg-opt[aria-pressed="true"] .count { background: #12121a; color: #fff; }
+.storage-pill {
+  display: flex; align-items: center; gap: 0.9rem; height: 2.85rem; padding: 0 1.2rem;
+  border-radius: 999px; font-size: 0.92rem; white-space: nowrap;
+}
+.storage-pill b { font-weight: 600; }
+.meter { width: 7rem; height: 0.4rem; border-radius: 999px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #8fb0ff, #fff); }
+
+/* ---------- Game cards: 6 per row on a 1920 TV, two rows fill the screen ---------- */
+.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--gap); }
+.card {
+  position: relative; display: block; width: 100%; height: auto; padding: 0; margin: 0;
+  border-radius: 16px; overflow: hidden; text-align: left; cursor: pointer;
+  background: #222; -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), var(--glass-edge), 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1rem 3rem rgba(0, 0, 0, 0.85);
+  -webkit-transition: -webkit-transform 0.18s ease; transition: transform 0.18s ease;
+  /* Safari clips the blurred children to the radius only with a mask or transform. */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+/* ponytail: padding-bottom keeps the card square (aspect-ratio needs Safari 15). */
+.card:before { content: ""; display: block; padding-bottom: 100%; }
+.card:hover, .card:focus { -webkit-transform: scale(1.03); transform: scale(1.03); }
+.card:focus { outline: 0.22rem solid #fff; outline-offset: 0.25rem; }
+.cover { position: absolute; left: 0; top: 0; right: 0; bottom: 0; overflow: hidden; }
+/* No art yet: coverStyle() in the script paints a gradient in the game's hue; its initials sit on top. */
+.cover .ini {
+  position: absolute; left: 0; right: 0; top: 22%; text-align: center;
+  font-size: 5rem; font-weight: 800; letter-spacing: -0.04em; color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 0.3rem 1.6rem rgba(0, 0, 0, 0.35);
+}
+.badge {
+  position: absolute; left: 0.75rem; top: 0.75rem; padding: 0.3rem 0.7rem; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.02em;
+  background: rgba(30, 30, 44, 0.34);
+  -webkit-backdrop-filter: blur(1.6rem) saturate(230%); backdrop-filter: blur(1.6rem) saturate(230%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.info {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 0.95rem 1rem 1rem;
+  background: rgba(12, 12, 22, 0.66);
+  -webkit-backdrop-filter: blur(3.6rem) saturate(180%); backdrop-filter: blur(3.6rem) saturate(180%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.info h3 {
+  font-size: 1.05rem; font-weight: 600; line-height: 1.25; color: #fff;
+  text-shadow: 0 1px 0.4rem rgba(0, 0, 0, 0.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.info p { margin-top: 0.3rem; font: 500 0.8rem var(--mono); color: rgba(255, 255, 255, 0.86); }
+.empty { padding: 4rem 0; text-align: center; color: var(--muted); }
+
+/* ---------- Game modal: full-screen glass sheet ---------- */
+.scrim {
+  position: fixed; left: 0; top: 0; right: 0; bottom: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center; padding: 3vh 3vw;
+  background: rgba(6, 6, 12, 0.62);
+  -webkit-backdrop-filter: blur(2.4rem); backdrop-filter: blur(2.4rem);
+}
+.sheet {
+  position: relative; width: 100%; max-width: 110rem; height: 100%; max-height: 62rem;
+  display: grid; grid-template-columns: 24rem minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 1.6rem 2.4rem; padding: 2.2rem 2.4rem; border-radius: 2rem;
+  background: rgba(18, 18, 30, 0.78);
+  -webkit-backdrop-filter: blur(4rem) saturate(180%); backdrop-filter: blur(4rem) saturate(180%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), var(--glass-edge), 0 1.4rem 4rem rgba(0, 0, 0, 0.6);
+}
+.sheet-side { grid-row: 1 / 4; display: flex; flex-direction: column; gap: 0.9rem; min-height: 0; }
+.sheet-pic { position: relative; border-radius: 1.2rem; overflow: hidden; box-shadow: var(--glass-edge), var(--glass-drop); }
+.sheet-pic:before { content: ""; display: block; padding-bottom: 100%; }
+.sheet-side .btns { display: flex; flex-direction: column; gap: 0.6rem; }
+.sheet-side button { width: 100%; height: 3rem; font-size: 1rem; }
+.sheet-side .badge { left: 1rem; top: 1rem; }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.sheet-head h2 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; text-shadow: 0 0.1rem 0.8rem rgba(0, 0, 0, 0.55); }
+.sheet-head p { margin-top: 0.4rem; font: 500 0.95rem var(--mono); color: var(--muted); }
+button.close { flex: none; width: 3rem; height: 3rem; padding: 0; }
+button.close .icon { width: 1.3rem; height: 1.3rem; }
+.panel { border-radius: 1.4rem; padding: 1.4rem 1.6rem; background: rgba(255, 255, 255, 0.07); overflow: auto; }
+.fields { display: grid; grid-template-columns: 12rem minmax(0, 1fr); gap: 0.85rem 1.4rem; margin: 0; }
+.fields dt { color: var(--muted); font-size: 0.95rem; }
+.fields dd { margin: 0; font-size: 1rem; word-wrap: break-word; overflow-wrap: break-word; min-width: 0; }
+.fields dd.mono { font-family: var(--mono); font-size: 0.9rem; }
+.tag { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600; background: rgba(255, 255, 255, 0.14); }
+.tag.green { background: rgba(47, 210, 122, 0.22); color: #9ff0c4; }
+.storage-line { border-radius: 1.4rem; padding: 1.1rem 1.6rem; background: rgba(255, 255, 255, 0.07); }
+.storage-line h3 { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.stack { display: flex; height: 0.7rem; margin: 0.7rem 0; border-radius: 999px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
+.stack i { display: block; height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.6rem; font-size: 0.92rem; }
+.legend span:before { content: ""; display: inline-block; width: 0.65rem; height: 0.65rem; margin-right: 0.45rem; border-radius: 50%; background: var(--c); }
+.c-game { --c: #8fb0ff; } .c-dlc { --c: #c9a4ff; } .c-save { --c: #7fe3d8; } .c-cache { --c: #ffd27a; }
+
+/* ---------- Settings: glass form rows ---------- */
+.settings { max-width: 64rem; margin: 0 auto; border-radius: 1.8rem; padding: 1.8rem 2rem; }
+.settings h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 1.2rem; }
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1.4rem;
+  padding: 1rem 1.2rem; border-radius: 1.1rem; background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12); margin-bottom: 0.6rem;
+}
+.row.col { display: block; }
+.row .lbl { font-size: 1rem; font-weight: 500; }
+.row .hint { display: block; margin-top: 0.25rem; font-size: 0.82rem; color: var(--muted); }
+.row textarea, .row input[type="number"], .row select {
+  font: inherit; color: var(--fg); background: rgba(0, 0, 0, 0.28); border: 0;
+  box-shadow: inset 0 1px 0.2rem rgba(0, 0, 0, 0.3);
+  border-radius: 0.8rem; padding: 0.55rem 0.8rem;
+}
+.row textarea { display: block; width: 100%; min-height: 5.5rem; margin-top: 0.7rem; font-family: var(--mono); font-size: 0.9rem; resize: vertical; }
+.row input[type="number"] { width: 8rem; text-align: right; }
+.row select { max-width: 30rem; min-width: 0; }
+.row input[type="checkbox"] { width: 1.5rem; height: 1.5rem; flex: none; margin: 0; accent-color: var(--accent); }
+.settings-foot { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.2rem; }
+.settings-foot p { color: var(--muted); font-size: 0.9rem; }
+.settings-foot .btns { display: flex; gap: 0.6rem; }
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sheet { grid-template-columns: 16rem minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  :root { --gutter: 16px; --gap: 12px; }
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* dump-forge's narrow header: brand + actions on one row, the tabs full width under them. */
+  .topbar-in {
+    display: grid; height: auto; gap: 10px 12px;
+    grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "brand actions" "nav nav";
+  }
+  .brand-row { grid-area: brand; }
+  .top-actions { grid-area: actions; }
+  .topbar-in > .nav { grid-area: nav; display: flex; }
+  .nav .seg-opt { -webkit-box-flex: 1; flex: 1 1 0; min-width: 0; }
+  .filters { flex-wrap: wrap; }
+  .seg-wrap { width: 100%; }
+  .chips { -webkit-box-flex: 1; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; padding: 0.3rem 0.1rem; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips .seg-opt { padding: 0 0.8rem; }
+  .chips .seg-opt:focus { outline-offset: -0.19rem; }
+  .scrim { padding: 0; }
+  .sheet { display: block; max-height: none; border-radius: 0; overflow-y: auto; padding: 16px; }
+  .sheet-side { flex-direction: row; flex-wrap: wrap; margin-bottom: 16px; }
+  .sheet-pic { width: 40%; }
+  .sheet-side .btns { flex: 1; display: flex; flex-direction: column; gap: 0.6rem; }
+  .sheet-head { margin-bottom: 16px; }
+  .sheet-head h2 { font-size: 1.5rem; }
+  .panel { margin-bottom: 16px; }
+  .fields { grid-template-columns: 8rem minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cover .ini { font-size: 3.6rem; }
+  .stop-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .settings { padding: 16px; border-radius: 1.2rem; }
+  .row { flex-wrap: wrap; }
+  .row select { max-width: 100%; }
+  .settings-foot { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------- Live state and actions ---------- */
+.busy { color: var(--fg-2); font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 13rem; }
+.busy:empty { display: none; }
+button:disabled { opacity: 0.5; cursor: default; }
+.banners { padding: 0 var(--gutter); }
+.banner {
+  display: none; margin: 0.8rem 0 0; padding: 0.8rem 1.1rem; border-radius: 1rem;
+  background: rgba(125, 34, 42, 0.34); color: #ffe4e4;
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--glass-drop); overflow-wrap: break-word;
+}
+.banner.warn { background: rgba(125, 83, 26, 0.34); color: #fff0cf; }
+.banner.show { display: block; }
+.banner:first-child { margin-top: 1rem; }
+.card .status-pill, .card .running-pill {
+  position: absolute; right: 0.75rem; top: 0.75rem; max-width: calc(100% - 1.5rem);
+  padding: 0.3rem 0.7rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600;
+  background: rgba(30, 30, 44, 0.5); color: #fff; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; -webkit-backdrop-filter: blur(1.6rem) saturate(230%);
+  backdrop-filter: blur(1.6rem) saturate(230%);
+  box-shadow: var(--glass-edge), 0 0.3rem 0.8rem rgba(0, 0, 0, 0.25);
+}
+.card .status-pill.s-error { background: rgba(150, 37, 51, 0.58); }
+.card .status-pill.s-duplicate { background: rgba(143, 92, 22, 0.58); }
+.card .status-pill.s-building, .card .status-pill.s-checking { background: rgba(45, 85, 168, 0.6); }
+.card .running-pill { top: 3rem; background: rgba(32, 121, 80, 0.62); }
+.card .status-pill[hidden] + .running-pill { top: 0.75rem; }
+.empty p { margin-top: 0.5rem; }
+.empty code { color: var(--fg); }
+.logbox { margin-top: 1.5rem; }
+.logbox pre {
+  display: none; max-height: 22rem; margin: 0.7rem 0 0; padding: 1rem;
+  border-radius: 1.2rem; background: rgba(20, 20, 32, 0.44); color: var(--fg-2);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-edge), var(--glass-drop); overflow: auto;
+  font: 0.8rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: break-word;
+}
+.logbox.open pre { display: block; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0 0 1.2rem; }
+.settings .banner { margin: 0 0 1.2rem; }
+.msg { min-height: 1.2em; margin-top: 0.6rem; color: var(--danger-ink); overflow-wrap: break-word; }
+.m-err { margin-top: 0.9rem; color: var(--danger-ink); overflow-wrap: break-word; }
+.m-err:empty { display: none; }
+#confirm { z-index: 20; }
+.dialog {
+  width: 100%; max-width: 34rem; max-height: 100%; overflow: auto; padding: 1.6rem;
+  border-radius: 1.6rem; background: rgba(255, 255, 255, 0.16);
+}
+.dialog h2 { margin-bottom: 0.7rem; font-size: 1.5rem; }
+.dialog p { margin-bottom: 1.4rem; color: var(--fg-2); overflow-wrap: break-word; }
+.dialog .btns { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.6rem; }
+@media (max-width: 600px) {
+  .brand img { width: 3rem; height: 3rem; }
+  .brand-row { gap: 0.4rem; }
+  .busy { max-width: 7rem; font-size: 0.72rem; }
+  .top-actions { gap: 0.35rem; }
+  .storage-pill { max-width: 100%; white-space: normal; height: auto; min-height: 2.85rem; flex-wrap: wrap; padding: 0.6rem 0.9rem; }
+  .dialog { max-width: none; border-radius: 1.2rem; }
+  .settings-foot .btns { flex-wrap: wrap; }
+}
+
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand-row">
+      <h1 class="brand"><img src="/app-icon.png" alt="Kraken Mount" width="128" height="128"></h1>
+      <span class="busy" id="busy" role="status"></span>
+    </div>
+    <div class="seg nav glass" role="tablist" aria-label="Screens">
+      <button class="seg-opt" role="tab" id="tab-library" aria-selected="true" aria-controls="library" data-view="library">Library</button>
+      <button class="seg-opt" role="tab" id="tab-settings" aria-selected="false" aria-controls="settings" data-view="settings">Settings</button>
+    </div>
+    <div class="top-actions">
+      <button class="small" id="stop" type="button" title="Stop Kraken Mount">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+        <span class="stop-label">Stop Kraken Mount</span>
+      </button>
+      <a class="gh-link button" href="https://github.com/quer3q/kraken-mount" aria-label="Kraken Mount on GitHub" title="Kraken Mount on GitHub">
+        <svg class="icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 0c4.42 0 8 3.58 8 8a8.01 8.01 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.36-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A8 8 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+      </a>
+    </div>
+  </div>
+</header>
+
+<div class="banners">
+  <div class="banner" id="offline" role="status">Offline: payload not running. Retrying.</div>
+  <div class="banner warn" id="lowspace" role="status"></div>
+  <div class="banner warn" id="noampr" role="status">ampr-emu-ng is missing: put <b>libSceAmpr.sprx</b> into /data/krakenmount/ampr/. FPKG games cannot run without it.</div>
+  <div class="banner warn" id="paused" role="status"></div>
+</div>
+
+<main>
+<section id="library" role="tabpanel" aria-labelledby="tab-library">
+  <div class="filters">
+    <div class="seg-wrap">
+      <button class="shoulder glass" type="button" tabindex="-1" data-step="-1" aria-label="Previous filter (L2)">L2</button>
+      <div class="chips" id="chips" role="group" aria-label="Source type"></div>
+      <button class="shoulder glass" type="button" tabindex="-1" data-step="1" aria-label="Next filter (R2)">R2</button>
+    </div>
+    <div class="storage-pill glass" id="storage"></div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="empty" hidden>
+    <h2>No games found.</h2>
+    <p>Copy <code>.pkg</code> files or game folders to <code>/data/homebrew</code> (or <code>homebrew</code> on a USB drive), then press Rescan.</p>
+    <p>Each game shows up here and on the home screen once it is registered.</p>
+  </div>
+  <section class="logbox" id="logbox">
+    <button id="logtoggle" type="button" aria-expanded="false" aria-controls="log">Show log</button>
+    <pre id="log"></pre>
+  </section>
+</section>
+
+<section id="settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+  <form class="settings glass" id="sform" onsubmit="return false">
+    <h2>Settings</h2>
+    <div class="banner warn" id="snoampr">ampr-emu-ng (libSceAmpr.sprx) is not in /data/krakenmount/ampr/.</div>
+    <div class="settings-actions">
+      <button class="primary" id="rescan" type="button">Rescan</button>
+      <button id="rebuildall" type="button">Rebuild all</button>
+    </div>
+    <label class="row col"><span class="lbl">Scan paths</span>
+      <span class="hint">One per line. Empty = default roots (/data/homebrew, /data/etaHEN/games, each drive's homebrew, etaHEN/games and root).</span>
+      <textarea id="f_scanpath" spellcheck="false"></textarea></label>
+    <label class="row"><span class="lbl">Inject ampr-emu-ng into every game's fakelib</span><input type="checkbox" id="f_inject_ampr"></label>
+    <label class="row"><span class="lbl">Game's own fakelib</span>
+      <select id="f_game_fakelib">
+        <option value="emulators">emulators (AppContent, GameUpdate, NpEntitlementAccess, PlayGo, Ampr)</option>
+        <option value="full">full</option>
+        <option value="off">off</option>
+      </select></label>
+    <label class="row"><span class="lbl">Apply backports</span><input type="checkbox" id="f_backports"></label>
+    <label class="row"><span class="lbl">Scan interval, seconds (1-3600)</span><input type="number" id="f_scan_interval_seconds" min="1" max="3600"></label>
+    <label class="row"><span class="lbl">Low space warning, GB</span><input type="number" id="f_low_space_gb" min="0"></label>
+    <label class="row"><span class="lbl">System notifications</span><input type="checkbox" id="f_notify"></label>
+    <label class="row"><span class="lbl">Write kraken.log (up to 1 MB)</span><input type="checkbox" id="f_log"></label>
+    <label class="row"><span class="lbl">Debug (klog capture, file route)</span><input type="checkbox" id="f_debug"></label>
+    <div class="settings-foot">
+      <div>
+        <p id="scache"></p>
+        <p id="sdrives"></p>
+        <div class="msg" id="smsg"></div>
+      </div>
+      <div class="btns">
+        <button class="danger" id="spurge" type="button">Purge cache</button>
+        <button class="primary" id="ssave" type="button">Save</button>
+      </div>
+    </div>
+  </form>
+</section>
+</main>
+
+<div class="scrim" id="modal" hidden>
+  <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="m-name">
+    <div class="sheet-side">
+      <div class="sheet-pic" id="m-pic"></div>
+      <div class="btns">
+        <button class="danger" type="button" id="m-delete">Delete</button>
+        <button type="button" id="m-rebuild">Rebuild cache</button>
+      </div>
+    </div>
+    <div class="sheet-head">
+      <div>
+        <h2 id="m-name"></h2>
+        <p id="m-sub"></p>
+      </div>
+      <button class="close" type="button" id="m-close" aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="panel">
+      <dl class="fields" id="m-fields"></dl>
+      <div class="m-err" id="m-err"></div>
+    </div>
+    <div class="storage-line">
+      <h3>Storage</h3>
+      <div class="stack" id="m-stack"></div>
+      <div class="legend" id="m-legend"></div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="confirm" hidden>
+  <div class="dialog glass" role="dialog" aria-modal="true" aria-labelledby="ctitle">
+    <h2 id="ctitle"></h2>
+    <p id="ctext"></p>
+    <div class="btns">
+      <button id="cno" type="button">Cancel</button>
+      <button id="cyes" class="danger" type="button"></button>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var state = null, cardsById = {}, filter = 'all', openTid = null, opener = null;
+var confirmFn = null, confirmOpener = null, timer = null, queued = false;
+var logOpen = false, settingsLoaded = false, sizesRequest = 0, modalActionError = '';
+var PS = /PlayStation (?:4|5)\b/i.test(navigator.userAgent || '');
+var ELF = 'http://127.0.0.1:9021/data/krakenmount/kraken-mount.elf';
+var LOOPBACK = (location.hostname === '127.0.0.1' || location.hostname === 'localhost') && location.port === '8097';
+var stopped = false, launchTried = false;
+var KINDS = [
+  { id: 'all', label: 'All' }, { id: 'pkg', label: 'PKG' }, { id: 'folder', label: 'Folders' },
+  { id: 'lz4', label: 'LZ4' }, { id: 'zstd', label: 'ZSTD' }
+];
+var LABEL = { pending: 'Pending', checking: 'Checking', building: 'Building', ready: 'Ready', error: 'Error', duplicate: 'Duplicate' };
+
+function el(tag, cls, value) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (value != null) e.textContent = value;
+  return e;
+}
+function setText(node, value) {
+  var s = value == null ? '' : String(value);
+  if (node.textContent !== s) node.textContent = s;
+}
+function fmtSize(bytes) {
+  var n = Number(bytes) || 0;
+  if (n >= 1073741824) return (n / 1073741824).toFixed(2) + ' GB';
+  return (n / 1048576).toFixed(n >= 104857600 ? 0 : 1) + ' MB';
+}
+function gb(bytes) { return ((Number(bytes) || 0) / 1073741824).toFixed(1) + ' GB'; }
+function fmtTime(secs) { return secs ? new Date(secs * 1000).toLocaleString() : 'not built'; }
+function setBanner(id, show, value) {
+  if (value != null) setText($(id), value);
+  $(id).classList.toggle('show', !!show);
+}
+function schedule(ms) { clearTimeout(timer); if (!stopped) timer = setTimeout(poll, ms); }
+function pausedText() {
+  var run = state && Array.isArray(state.running) ? state.running.join(', ') : '';
+  return 'Game running (' + (run || '?') + '), scan paused; requests run after it exits.' +
+    (queued ? ' Your request is queued.' : '');
+}
+async function post(path) {
+  try {
+    var r = await fetch(path, { method: 'POST' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (state && state.paused) { queued = true; setBanner('paused', true, pausedText()); }
+  } catch (e) { setBanner('offline', true); }
+  schedule(300);
+}
+async function startPayload() {
+  launchTried = true;
+  setBanner('offline', true, 'Starting Kraken Mount...');
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 10000);
+  try {
+    var r = await fetch(ELF + '?args=serve&pipe=0&n=' + Date.now(),
+      { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: ctl.signal });
+    var body = await r.text();
+    if (body.indexOf('Error reading') >= 0)
+      setBanner('offline', true, 'kraken-mount.elf is not saved yet: send the ELF to port 9021 once.');
+  } catch (e) { /* elfldr may hold the connection after starting the payload. */ }
+  finally { clearTimeout(t); }
+}
+
+function gameId(g) { return g.title_id + (g.status === 'duplicate' ? '|' + g.path : ''); }
+function findGame(id) {
+  var games = state && Array.isArray(state.games) ? state.games : [];
+  for (var i = 0; i < games.length; i++) if (games[i] && gameId(games[i]) === id) return games[i];
+  return null;
+}
+function gameKind(g) {
+  if (g.kind === 'pkg') return 'pkg';
+  if (g.packing === 'lz4' || g.packing === 'zstd') return g.packing;
+  return 'folder';
+}
+function badgeText(g) { return { pkg: 'PKG', folder: 'Folder', lz4: 'LZ4', zstd: 'ZSTD' }[gameKind(g)]; }
+function gameName(g) { return g.title_name || g.title_id; }
+function gameSub(g) { return g.title_id + (g.version ? ' · ' + g.version : ''); }
+function isRunning(g) { return state && Array.isArray(state.running) && state.running.indexOf(g.title_id) >= 0; }
+function driveLabel(mount) {
+  if (mount === '/data') return 'Internal';
+  var drives = state && Array.isArray(state.drives) ? state.drives : [];
+  for (var i = 0; i < drives.length; i++)
+    if (drives[i].mount === mount) return drives[i].label || drives[i].mount;
+  return mount || '?';
+}
+function initials(name) {
+  var words = String(name || '?').replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean);
+  if (!words.length) return '?';
+  return (words.length > 1 ? words[0].charAt(0) + words[1].charAt(0) : words[0].slice(0, 2)).toUpperCase();
+}
+function coverStyle(h) {
+  return 'radial-gradient(circle at 25% 20%, hsla(' + h + ',90%,70%,0.95), transparent 55%),' +
+    'radial-gradient(circle at 80% 75%, hsla(' + (h + 50) + ',85%,45%,0.95), transparent 60%),' +
+    'linear-gradient(160deg, hsl(' + h + ',60%,30%), hsl(' + (h + 30) + ',70%,12%))';
+}
+function gameHue(id) {
+  var h = 0;
+  for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360;
+  return h;
+}
+function makeCover() {
+  var cover = el('div', 'cover'), ini = el('div', 'ini'), img = el('img');
+  img.alt = '';
+  img.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;display:none';
+  cover.appendChild(ini);
+  cover.appendChild(img);
+  return { el: cover, ini: ini, img: img, key: null, status: null, failed: false };
+}
+function updateCover(c, g) {
+  c.el.style.background = coverStyle(gameHue(g.title_id));
+  setText(c.ini, initials(gameName(g)));
+  var key = String(g.cache_built || 0);
+  // Rebuilds and a status change after missing art give the image another chance.
+  if (c.key !== key || (c.failed && c.status !== g.status)) {
+    c.key = key;
+    c.failed = false;
+    c.img.style.display = 'none';
+    var img = c.img, tid = encodeURIComponent(g.title_id), version = '?v=' + encodeURIComponent(key);
+    img.onload = function () { img.style.display = 'block'; };
+    img.onerror = function () {
+      if (img.src.indexOf('/pic/') >= 0) img.src = '/icon/' + tid + version;
+      else { img.style.display = 'none'; c.failed = true; }
+    };
+    img.src = '/pic/' + tid + version;
+  }
+  c.status = g.status;
+}
+
+function renderChips(games) {
+  var counts = { all: 0, pkg: 0, folder: 0, lz4: 0, zstd: 0 };
+  games.forEach(function (g) { if (g && g.title_id) { counts.all++; counts[gameKind(g)]++; } });
+  var box = $('chips');
+  KINDS.forEach(function (kind, i) {
+    var b = box.children[i];
+    if (!b) {
+      b = el('button', 'seg-opt');
+      b.type = 'button';
+      b.setAttribute('data-kind', kind.id);
+      b.appendChild(document.createTextNode(kind.label + ' '));
+      b.appendChild(el('span', 'count'));
+      b.onclick = function () { setFilter(kind.id); };
+      box.appendChild(b);
+    }
+    b.setAttribute('aria-pressed', String(kind.id === filter));
+    setText(b.lastChild, counts[kind.id]);
+  });
+}
+function focusChip() {
+  var chip = $('chips').querySelector('[aria-pressed="true"]');
+  if (chip) chip.focus();
+}
+function setFilter(id) {
+  var focus = document.activeElement;
+  var cardFocused = focus && focus.parentNode === $('grid');
+  filter = id;
+  var games = state && Array.isArray(state.games) ? state.games : [];
+  renderChips(games);
+  renderGrid(games);
+  if (cardFocused && $('grid').firstChild && document.activeElement === document.body)
+    $('grid').firstChild.focus();
+}
+function stepFilter(d) {
+  var i = 0;
+  KINDS.forEach(function (k, j) { if (k.id === filter) i = j; });
+  setFilter(KINDS[(i + d + KINDS.length) % KINDS.length].id);
+}
+function renderStorage(drives) {
+  var disk = null;
+  (drives || []).forEach(function (d) { if (d.mount === '/data') disk = d; });
+  var box = $('storage');
+  box.hidden = !disk;
+  if (!disk) return;
+  if (!box.firstChild) {
+    box.appendChild(el('b', null, 'Internal'));
+    var meter = el('span', 'meter');
+    meter.appendChild(el('i'));
+    box.appendChild(meter);
+    box.appendChild(el('span'));
+  }
+  var used = disk.total ? Math.max(0, Math.min(100, 100 * (disk.total - disk.free) / disk.total)) : 0;
+  box.children[1].firstChild.style.width = used.toFixed(1) + '%';
+  setText(box.children[2], 'free ' + fmtSize(disk.free) + ' of ' + fmtSize(disk.total));
+}
+function makeCard(id) {
+  var button = el('button', 'card'), cover = makeCover();
+  button.type = 'button';
+  button.setAttribute('data-key', id);
+  button.onclick = function () { openModal(id, button); };
+  cover.badge = el('span', 'badge');
+  cover.el.appendChild(cover.badge);
+  button.appendChild(cover.el);
+  var info = el('div', 'info');
+  var name = el('h3'), sub = el('p');
+  info.appendChild(name);
+  info.appendChild(sub);
+  button.appendChild(info);
+  var status = el('span', 'status-pill'), running = el('span', 'running-pill', 'Running');
+  button.appendChild(status);
+  button.appendChild(running);
+  return { el: button, cover: cover, name: name, sub: sub, status: status, running: running };
+}
+function updateCard(c, g) {
+  var name = gameName(g), status = LABEL[g.status] ? g.status : 'pending';
+  setText(c.name, name);
+  c.name.title = name;
+  setText(c.sub, gameSub(g));
+  setText(c.cover.badge, badgeText(g));
+  c.el.setAttribute('aria-label', name + ', ' + badgeText(g) + ', ' + LABEL[status] + (isRunning(g) ? ', Running' : ''));
+  c.status.hidden = status === 'ready';
+  c.status.className = 'status-pill s-' + status;
+  setText(c.status, LABEL[status]);
+  c.running.hidden = !isRunning(g);
+  updateCover(c.cover, g);
+}
+function renderGrid(games) {
+  var grid = $('grid'), seen = {}, count = 0;
+  var focus = document.activeElement, focusKey = focus && focus.getAttribute ? focus.getAttribute('data-key') : null;
+  games.forEach(function (g) {
+    if (!g || !g.title_id || (filter !== 'all' && gameKind(g) !== filter)) return;
+    var id = gameId(g);
+    if (seen[id]) return;
+    seen[id] = true;
+    var c = cardsById[id] || (cardsById[id] = makeCard(id));
+    updateCard(c, g);
+    if (grid.children[count] !== c.el) grid.insertBefore(c.el, grid.children[count] || null);
+    count++;
+  });
+  Object.keys(cardsById).forEach(function (id) {
+    if (!seen[id]) {
+      if (cardsById[id].el.parentNode === grid) grid.removeChild(cardsById[id].el);
+      delete cardsById[id];
+    }
+  });
+  var empty = $('empty'), any = games.some(function (g) { return g && g.title_id; });
+  empty.hidden = count > 0;
+  setText(empty.querySelector('h2'), any ? 'No games of this type.' : 'No games found.');
+  var paragraphs = empty.querySelectorAll('p');
+  for (var i = 0; i < paragraphs.length; i++) paragraphs[i].hidden = any;
+  if (focusKey && document.activeElement === document.body) {
+    if (cardsById[focusKey]) cardsById[focusKey].el.focus();
+    else if (grid.firstChild) grid.firstChild.focus();
+    else focusChip();
+  }
+}
+
+function modalOpen() { return !$('modal').hidden; }
+// PS browser drives its own cursor, so only inert keeps it out of the layers behind the top one (as SMP does).
+function syncInert() {
+  if (!PS) return;
+  var dialog = !$('confirm').hidden, below = dialog || modalOpen();
+  ['.topbar', '.banners', 'main'].forEach(function (q) { document.querySelector(q).inert = below; });
+  $('modal').inert = dialog && modalOpen();
+}
+function closeModal() {
+  sizesRequest++;
+  openTid = null;
+  $('modal').hidden = true;
+  syncInert();
+  var back = opener;
+  opener = null;
+  if (back && document.body.contains(back) && !back.disabled) back.focus();
+  else if ($('grid').firstChild) $('grid').firstChild.focus();
+  else focusChip();
+}
+function renderModal() {
+  var g = openTid && findGame(openTid);
+  if (!g) { if (modalOpen()) closeModal(); return; }
+  var name = gameName(g);
+  setText($('m-name'), name);
+  setText($('m-sub'), gameSub(g));
+  var picture = $('m-pic')._cover;
+  if (!picture) {
+    $('m-pic').textContent = '';
+    picture = makeCover();
+    picture.badge = el('span', 'badge');
+    picture.el.appendChild(picture.badge);
+    $('m-pic')._cover = picture;
+    $('m-pic').appendChild(picture.el);
+  }
+  updateCover(picture, g);
+  setText(picture.badge, badgeText(g));
+  var status = LABEL[g.status] || LABEL.pending;
+  if (isRunning(g)) status += ' · running';
+  var backport = g.backport == null || g.backport === false || g.backport === '' ? 'No' :
+    g.backport === true ? 'Yes' : String(g.backport);
+  var rows = [
+    ['Title ID', g.title_id], ['Version', g.version || '—'], ['Status', status],
+    ['Type', badgeText(g) + ' (' + g.kind + ')'], ['Drive', driveLabel(g.drive)],
+    ['Path', g.path || '—'], ['Cache path', (state.cache && state.cache.path ? state.cache.path : '/data/krakenmount/caches') + '/' + g.title_id],
+    ['Cache size', fmtSize(g.cache_size)], ['Cache built', fmtTime(g.cache_built)], ['Backport', backport]
+  ];
+  var fields = $('m-fields'), sig = JSON.stringify(rows);
+  if (fields._sig !== sig) {
+    fields._sig = sig;
+    fields.textContent = '';
+    rows.forEach(function (row) {
+      fields.appendChild(el('dt', null, row[0]));
+      var dd = el('dd', /^(Title ID|Path|Cache path)$/.test(row[0]) ? 'mono' : null);
+      if (row[0] === 'Status') dd.appendChild(el('span', 'tag' + (g.status === 'ready' ? ' green' : ''), row[1]));
+      else setText(dd, row[1]);
+      fields.appendChild(dd);
+    });
+  }
+  setText($('m-err'), modalActionError || g.error || '');
+  // A duplicate shares the title id of the library copy: the API calls would act on that copy.
+  $('m-rebuild').disabled = g.status === 'duplicate' || g.status === 'building';
+  $('m-delete').disabled = g.status === 'duplicate';
+}
+function renderSizes(sizes) {
+  var stack = $('m-stack'), legend = $('m-legend');
+  stack.textContent = '';
+  legend.textContent = '';
+  if (!sizes) { setText(legend, 'Sizes unavailable'); return; }
+  var parts = [
+    ['game', 'Game', sizes.game], ['dlc', 'DLC', sizes.dlc],
+    ['save', 'Save', sizes.save], ['cache', 'Cache', sizes.cache]
+  ];
+  var total = 0;
+  parts.forEach(function (part) { if (part[2] != null) total += Math.max(0, Number(part[2]) || 0); });
+  parts.forEach(function (part) {
+    if (part[2] == null) { legend.appendChild(el('span', 'c-' + part[0], part[1] + ' n/a')); return; }
+    var amount = Math.max(0, Number(part[2]) || 0);
+    var bar = el('i', 'c-' + part[0]);
+    bar.style.width = (total ? amount / total * 100 : 0).toFixed(2) + '%';
+    bar.style.background = 'var(--c)';
+    stack.appendChild(bar);
+    legend.appendChild(el('span', 'c-' + part[0], part[1] + ' ' + fmtSize(amount)));
+  });
+  legend.appendChild(el('span', null, 'Total ' + fmtSize(total)));
+}
+async function loadSizes(tid, request) {
+  try {
+    var r = await fetch('/api/sizes/' + encodeURIComponent(tid), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var sizes = await r.json();
+    if (request === sizesRequest && modalOpen()) renderSizes(sizes);
+  } catch (e) { if (request === sizesRequest && modalOpen()) renderSizes(null); }
+}
+function openModal(id, fromCard) {
+  if (!findGame(id)) return;
+  opener = fromCard || document.activeElement;
+  openTid = id;
+  modalActionError = '';
+  $('m-pic').textContent = '';
+  $('m-pic')._cover = null;
+  $('m-fields')._sig = null;
+  $('modal').hidden = false;
+  syncInert();
+  renderModal();
+  renderSizes(null);
+  sizesRequest++;
+  if (findGame(id).status === 'duplicate') setText($('m-legend'), 'Duplicate copy: sizes are shown on the library copy.');
+  else { setText($('m-legend'), 'Loading sizes...'); loadSizes(findGame(id).title_id, sizesRequest); }
+  $('m-close').focus();
+}
+$('m-close').onclick = closeModal;
+$('m-rebuild').onclick = function () {
+  var g = openTid && findGame(openTid);
+  if (!g) return;
+  ask('Rebuild the cache of ' + gameName(g) + '?',
+    'The cache will be built again. The game is unavailable until it finishes.', 'Rebuild',
+    function () { post('/api/rebuild/' + encodeURIComponent(g.title_id)); });
+};
+$('m-delete').onclick = function () {
+  var g = openTid && findGame(openTid);
+  if (!g) return;
+  var tid = g.title_id;
+  ask('Delete ' + gameName(g) + '?',
+    (g.kind === 'pkg' ? 'The .pkg file' : 'The game folder') +
+      ' and its cache will be deleted from the drive: ' + g.path + '. This cannot be undone.',
+    'Delete', async function () {
+      try {
+        var r = await fetch('/api/delete/' + encodeURIComponent(tid), { method: 'POST', body: g.path });
+        if (!r.ok) throw new Error((await r.text()) || 'HTTP ' + r.status);
+        closeModal();
+        schedule(300);
+      } catch (e) {
+        if (modalOpen() && openTid === gameId(g)) {
+          modalActionError = e.message;
+          setText($('m-err'), modalActionError);
+        }
+      }
+    });
+};
+
+function closeConfirm() {
+  $('confirm').hidden = true;
+  syncInert();
+  var back = confirmOpener;
+  confirmOpener = null;
+  if (back && document.body.contains(back) && !back.disabled) back.focus();
+  else if (modalOpen()) $('m-close').focus();
+  else focusChip();
+}
+function ask(title, message, yes, fn) {
+  setText($('ctitle'), title);
+  setText($('ctext'), message);
+  setText($('cyes'), yes);
+  confirmFn = fn;
+  confirmOpener = document.activeElement;
+  $('confirm').hidden = false;
+  syncInert();
+  $('cno').focus();
+}
+$('cno').onclick = function () { confirmFn = null; closeConfirm(); };
+$('cyes').onclick = function () {
+  var fn = confirmFn;
+  confirmFn = null;
+  closeConfirm();
+  if (fn) fn();
+};
+$('stop').onclick = function () {
+  ask('Stop Kraken Mount?', 'Games stay registered. Open the Kraken Mount tile to start it again.', 'Stop', async function () {
+    try {
+      var r = await fetch('/api/quit', { method: 'POST', body: 'shutdown' });
+      if (r.status === 409) {
+        setBanner('paused', true, 'A game is running: close it first, then stop Kraken Mount.');
+        return;
+      }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      stopped = true;
+      clearTimeout(timer);
+      setBanner('offline', true, 'Kraken Mount stopped. Open the Kraken Mount tile to start it again.');
+    } catch (e) { setBanner('offline', true); }
+  });
+};
+$('rescan').onclick = function () { post('/api/rescan'); };
+$('rebuildall').onclick = function () {
+  ask('Rebuild all caches?', 'Every game cache is emptied and built again. Games are unavailable while they rebuild.',
+    'Rebuild all', function () { post('/api/rebuild-all'); });
+};
+
+async function poll() {
+  if (stopped) return;
+  try {
+    var r = await fetch('/api/state', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    state = await r.json();
+    setBanner('offline', false);
+    setText($('busy'), state.busy ? 'Working...' : '');
+    var cache = state.cache || {};
+    setBanner('lowspace', !!cache.low_space,
+      'Low space on the internal SSD: ' + gb(cache.free) + ' free. Cache builds may fail.');
+    setBanner('noampr', cache.ampr_present === false);
+    setBanner('snoampr', cache.ampr_present === false);
+    if (!state.paused) queued = false;
+    setBanner('paused', !!state.paused, pausedText());
+    var games = Array.isArray(state.games) ? state.games : [];
+    renderChips(games);
+    renderStorage(state.drives);
+    renderGrid(games);
+    if (modalOpen()) renderModal();
+    if (typeof renderSettingsInfo === 'function') renderSettingsInfo();
+    var lines = Array.isArray(state.log) ? state.log : [];
+    var logText = lines.slice(-100).join('\n');
+    if ($('log').textContent !== logText) {
+      setText($('log'), logText);
+      if (logOpen) $('log').scrollTop = $('log').scrollHeight;
+    }
+  } catch (e) {
+    if (stopped) return;
+    setBanner('offline', true);
+    if (LOOPBACK && !launchTried) await startPayload();
+  }
+  if (!stopped) schedule(2000);
+}
+
+// ---- chunk 3: settings, log, views, keys ----
+var BOOLS = ['inject_ampr', 'backports', 'notify', 'log', 'debug'];
+var NUMS = ['scan_interval_seconds', 'low_space_gb'];
+var settingsRequest = 0;
+function fillSettings(v) {
+  $('f_scanpath').value = (v.scanpath || []).join('\n');
+  BOOLS.forEach(function (k) { $('f_' + k).checked = v[k] === true || v[k] === 1; });
+  NUMS.forEach(function (k) { $('f_' + k).value = v[k] == null ? '' : v[k]; });
+  $('f_game_fakelib').value = v.game_fakelib || 'emulators';
+}
+function readSettings() {
+  var v = {
+    scanpath: $('f_scanpath').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean),
+    game_fakelib: $('f_game_fakelib').value
+  };
+  BOOLS.forEach(function (k) { v[k] = $('f_' + k).checked; });
+  NUMS.forEach(function (k) { var n = parseInt($('f_' + k).value, 10); if (!isNaN(n)) v[k] = n; });
+  return v;
+}
+function renderSettingsInfo() {
+  var c = (state && state.cache) || {};
+  setText($('scache'), 'Cache: ' + fmtSize(c.size) + ' in ' + (c.path || '/data/krakenmount/caches') +
+    ', ' + gb(c.free) + ' free on the internal SSD.');
+  var drives = (state && Array.isArray(state.drives)) ? state.drives : [];
+  setText($('sdrives'), drives.map(function (d) {
+    return driveLabel(d.mount) + ': ' + gb(d.free) + ' free of ' + gb(d.total);
+  }).join(' · '));
+}
+async function loadSettings() {
+  var request = ++settingsRequest;
+  settingsLoaded = false;
+  $('ssave').disabled = true;
+  setText($('smsg'), 'Loading...');
+  renderSettingsInfo();
+  try {
+    var r = await fetch('/api/settings', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var v = await r.json();
+    if (request !== settingsRequest || $('settings').hidden) return;
+    fillSettings(v);
+    settingsLoaded = true;
+    $('ssave').disabled = false;
+    setText($('smsg'), '');
+  } catch (e) {
+    if (request === settingsRequest && !$('settings').hidden)
+      setText($('smsg'), 'Could not load settings: ' + e.message + '. Close and reopen to retry; Save is off.');
+  }
+}
+function setView(v) {
+  var opening = v === 'settings' && $('settings').hidden;
+  var tabs = document.querySelectorAll('.nav .seg-opt');
+  for (var i = 0; i < tabs.length; i++) {
+    var on = tabs[i].getAttribute('data-view') === v;
+    tabs[i].setAttribute('aria-selected', String(on));
+    $(tabs[i].getAttribute('aria-controls')).hidden = !on;
+  }
+  if (opening) loadSettings();
+  else if (v === 'library') settingsRequest++;
+}
+var tabs = document.querySelectorAll('.nav .seg-opt');
+for (var i = 0; i < tabs.length; i++)
+  tabs[i].onclick = function () { setView(this.getAttribute('data-view')); };
+$('ssave').onclick = async function () {
+  if (!settingsLoaded) return;
+  setText($('smsg'), 'Saving...');
+  try {
+    var r = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(readSettings()) });
+    if (!r.ok) throw new Error((await r.text()) || 'HTTP ' + r.status);
+    setText($('smsg'), 'Saved.');
+    schedule(300);
+  } catch (e) { setText($('smsg'), 'Save failed: ' + e.message); }
+};
+$('spurge').onclick = function () {
+  ask('Purge cache?', 'Deletes the caches of games no longer in the library and empties and rebuilds all others (' +
+    fmtSize(state && state.cache && state.cache.size) + ' now). Games are unavailable while they rebuild.',
+    'Purge', function () { post('/api/purge'); });
+};
+$('logtoggle').onclick = function () {
+  logOpen = !logOpen;
+  $('logbox').classList.toggle('open', logOpen);
+  this.setAttribute('aria-expanded', String(logOpen));
+  setText(this, logOpen ? 'Hide log' : 'Show log');
+  if (logOpen) $('log').scrollTop = $('log').scrollHeight;
+};
+var shoulders = document.querySelectorAll('.shoulder[data-step]');
+for (var s = 0; s < shoulders.length; s++)
+  shoulders[s].onclick = function () { stepFilter(+this.getAttribute('data-step')); };
+$('modal').onclick = function (e) { if (e.target === this) closeModal(); };
+
+function cards() { return Array.prototype.slice.call(document.querySelectorAll('#grid .card')); }
+function columns(list) {
+  var n = 0;
+  while (n < list.length && list[n].offsetTop === list[0].offsetTop) n++;
+  return n || 1;
+}
+function moveInGrid(card, key) {
+  var list = cards(), i = list.indexOf(card), cols = columns(list);
+  if (key === 'ArrowLeft' && i % cols === 0) return;
+  if (key === 'ArrowRight' && i % cols === cols - 1) return;
+  var j = key === 'ArrowLeft' ? i - 1 : key === 'ArrowRight' ? i + 1 :
+    key === 'ArrowUp' ? i - cols : i + cols;
+  if (key === 'ArrowUp' && j < 0) { focusChip(); return; }
+  if (key === 'ArrowDown' && j >= list.length) {
+    if (Math.floor(i / cols) < Math.floor((list.length - 1) / cols)) j = list.length - 1;
+    else { $('logtoggle').focus(); return; }
+  }
+  if (j >= 0 && j < list.length) list[j].focus();
+}
+function moveInSeg(btn, key) {
+  var seg = btn.parentNode;
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    var sib = key === 'ArrowLeft' ? btn.previousElementSibling : btn.nextElementSibling;
+    if (sib) sib.focus();
+    else if (seg.id !== 'chips') moveInTop(btn, key);
+  } else if (seg.id === 'chips') {
+    if (key === 'ArrowDown' && cards().length) cards()[0].focus();
+    if (key === 'ArrowUp') document.querySelector('.nav [aria-selected="true"]').focus();
+  } else if (key === 'ArrowDown') {
+    if ($('library').hidden) fields()[0].focus(); else focusChip();
+  }
+}
+// The top row: screen tabs, then Stop and GitHub.
+function moveInTop(t, key) {
+  var row = Array.prototype.slice.call(document.querySelectorAll('.topbar .nav .seg-opt, .topbar .top-actions button, .topbar .top-actions a'));
+  var j = row.indexOf(t) + (key === 'ArrowLeft' ? -1 : 1);
+  if (row[j]) row[j].focus();
+}
+function fields() {
+  return Array.prototype.slice.call(document.querySelectorAll('#settings textarea, #settings input, #settings select, #settings button'));
+}
+function moveInSettings(t, key) {
+  var list = fields(), i = list.indexOf(t);
+  if (i < 0) return false;
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    if (t.tagName !== 'BUTTON') return false;
+    var sib = key === 'ArrowLeft' ? t.previousElementSibling : t.nextElementSibling;
+    if (sib && sib.tagName === 'BUTTON') sib.focus();
+    return true;
+  }
+  if (t.tagName === 'TEXTAREA' &&
+      (key === 'ArrowUp' ? t.selectionStart > 0 : t.selectionEnd < t.value.length)) return false;
+  if (t.tagName === 'BUTTON') {
+    if (t.parentNode.classList.contains('settings-actions')) {
+      if (key === 'ArrowUp') $('tab-settings').focus(); else $('f_scanpath').focus();
+      return true;
+    }
+    if (t.parentNode.classList.contains('btns')) {
+      if (key === 'ArrowDown') return true;
+      i = list.indexOf(t.parentNode.firstElementChild);
+    }
+  }
+  if (key === 'ArrowUp' && i === 0) $('tab-settings').focus();
+  else if (list[i + (key === 'ArrowUp' ? -1 : 1)]) list[i + (key === 'ArrowUp' ? -1 : 1)].focus();
+  return true;
+}
+function moveInModal(key) {
+  var list = Array.prototype.slice.call(document.querySelectorAll('#modal button:not([disabled])'));
+  var i = list.indexOf(document.activeElement);
+  var d = key === 'ArrowLeft' || key === 'ArrowUp' ? -1 : 1;
+  list[(i + d + list.length) % list.length].focus();
+}
+function keepTabInside(e, list) {
+  var i = list.indexOf(document.activeElement);
+  if (i < 0 || (e.shiftKey && i === 0) || (!e.shiftKey && i === list.length - 1)) {
+    e.preventDefault();
+    list[e.shiftKey ? list.length - 1 : 0].focus();
+  }
+}
+var KEYS = { 8: 'Backspace', 27: 'Escape', 37: 'ArrowLeft', 38: 'ArrowUp',
+  39: 'ArrowRight', 40: 'ArrowDown', 118: 'F7', 119: 'F8' };
+document.addEventListener('keydown', function (e) {
+  // Old WebKit may leave e.key empty; PS5 L2/R2 arrive as F7/F8.
+  var k = e.key || KEYS[e.keyCode] || '', t = e.target;
+  var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && t.type !== 'checkbox';
+  var arrow = /^Arrow/.test(k);
+  if (!$('confirm').hidden) {
+    if (k === 'Escape' || (k === 'Backspace' && !typing)) { e.preventDefault(); $('cno').click(); return; }
+    if (k === 'Tab') { keepTabInside(e, [$('cno'), $('cyes')]); return; }
+    if (arrow && !PS) {
+      e.preventDefault();
+      (document.activeElement === $('cno') ? $('cyes') : $('cno')).focus();
+    }
+    return;
+  }
+  if (modalOpen()) {
+    if (k === 'Escape' || k === 'Backspace') { e.preventDefault(); closeModal(); return; }
+    if (k === 'Tab') {
+      keepTabInside(e, Array.prototype.slice.call(document.querySelectorAll('#modal button:not([disabled])')));
+      return;
+    }
+    if (arrow && !PS) { e.preventDefault(); moveInModal(k); }
+    return;
+  }
+  if (k === 'Escape' || (k === 'Backspace' && !typing)) {
+    if (!$('settings').hidden) { e.preventDefault(); setView('library'); $('tab-library').focus(); }
+    return;
+  }
+  if ((k === 'F7' || k === 'F8') && !$('library').hidden) {
+    e.preventDefault(); stepFilter(k === 'F7' ? -1 : 1); return;
+  }
+  // PlayStation uses unconsumed arrows to move its native cursor and open the text IME.
+  if (!arrow || PS) return;
+  if ($('settings').contains(t)) { if (moveInSettings(t, k)) e.preventDefault(); return; }
+  if (typing) return;
+  if (t.classList.contains('card')) { e.preventDefault(); moveInGrid(t, k); }
+  else if (t.classList.contains('seg-opt')) { e.preventDefault(); moveInSeg(t, k); }
+  else if (t.id === 'logtoggle') {
+    e.preventDefault();
+    var all = cards();
+    if (k === 'ArrowUp') { if (all.length) all[all.length - 1].focus(); else focusChip(); }
+  }
+  else if ((k === 'ArrowLeft' || k === 'ArrowRight') && t.parentNode.classList.contains('top-actions')) {
+    e.preventDefault(); moveInTop(t, k);
+  }
+  else if (k === 'ArrowDown' && document.querySelector('.topbar').contains(t)) {
+    e.preventDefault();
+    if ($('library').hidden) fields()[0].focus(); else focusChip();
+  }
+});
+document.addEventListener('focusin', function (e) {
+  var top = !$('confirm').hidden ? $('confirm') : modalOpen() ? $('modal') : null;
+  if (top && !top.contains(e.target))
+    (top === $('confirm') ? $('cno') : $('m-close')).focus();
+});
+
+$('tab-library').focus();
+poll();
+</script>
+</body>
+</html>

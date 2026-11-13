@@ -1,0 +1,28 @@
+[package]
+name = "kraken-mount"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[workspace]
+members = [".", "crates/kraken-mount-pkg"]
+
+[features]
+# Stage 2 of ps5/build.sh: embeds stage 1 (env KRAKEN_SELF_ELF) to save it as the tile's copy.
+self-copy = []
+
+[dependencies]
+kraken-mount-pkg = { path = "crates/kraken-mount-pkg" }
+libc = "0.2.187"
+serde_json = "1"
+
+# Kraken decoding is hot during cache builds.
+[profile.release.package.kraken-mount-pkg]
+opt-level = 3
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

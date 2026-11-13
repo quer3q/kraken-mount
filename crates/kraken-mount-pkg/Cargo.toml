@@ -1,0 +1,15 @@
+[package]
+name = "kraken-mount-pkg"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+description = "no_std reader for dump-forge debug FPKG packages, with its Kraken block decoder"
+
+[features]
+default = []
+# Debug accessors for a host probe (block list, walked files).
+probe = []
+# `decoder::phase`: cycle counters per decode phase (rdtsc / cntvct_el0), for profiling only.
+phase_timing = []
+
+[dependencies]
