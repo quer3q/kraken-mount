@@ -3,8 +3,9 @@
 A Rust PS5 ELF payload (`src/`). It finds games on the internal SSD and on USB/extended drives,
 keeps a per-game cache on the internal SSD, registers each game on the home screen and, at
 launch, overlays the game's fakelib and the shared ampr-emu-ng dir on the sandbox's system libs.
-The ampr-emu-ng runtime is NOT built here: a prebuilt `libSceAmpr.sprx`
-(ampr-emu-ng with pkg mode) goes into `/data/krakenmount/ampr/`.
+The ampr-emu-ng runtime is NOT built here: its released `libSceAmpr.sprx` is bundled from
+`vendor/ampr-emu-ng/` (`VERSION`, `SHA256SUMS` from the GitHub release, checked by `ps5/build.sh`)
+and installed into `/data/krakenmount/ampr/` at start.
 `crates/kraken-mount-pkg` reads debug FPKGs (the reader plus its Kraken block decoder, module `decoder`).
 
 ## Supported sources (nothing else)
@@ -18,6 +19,7 @@ The ampr-emu-ng runtime is NOT built here: a prebuilt `libSceAmpr.sprx`
 |---|---|
 | `/data/krakenmount/config.toml` | settings (created with defaults on first start) |
 | `/data/krakenmount/caches/<TID>/` | per-game cache |
+| `/data/krakenmount/ampr.bundled` | `<len> <crc32>` of the bundled `libSceAmpr.sprx` last installed (outside `ampr/`, whose files all go into fakelib) |
 | `/data/krakenmount/ampr/` | ampr-emu-ng files (`libSceAmpr.sprx`, ...), copied on top of every game's `fakelib/` in its cache (chmod 0777 at start; a `libkernel.sprx` there is never copied and logs a warning) |
 | `/data/krakenmount/kraken.log` | log (setting `log`); starts over past 1 MiB, no kept copy |
 | `/data/krakenmount/kraken-mount.elf` | self copy the tile starts (Dump Forge style, below) |
@@ -76,7 +78,9 @@ Invalid values are logged and replaced by the default. The web UI edits the same
   a dir whose unmount fails is skipped and logged), empty and rebuild the rest.
 
 ## Flow (`src/main.rs`)
-Start: create dirs, load config, take port 8097 (asks an older copy to quit), ampr chmod, web thread,
+Start: create dirs, load config, take port 8097 (asks an older copy to quit), install the bundled
+`libSceAmpr.sprx` when `ampr/libSceAmpr.sprx` is missing or matches `ampr.bundled` (an older bundled
+copy; a file put there by hand is kept), ampr chmod, web thread,
 launch watcher thread, klog thread when `debug`. Loop every `scan_interval_seconds` or on
 wake: reload config, scan, then for each game: freshness check, build if stale or forced,
 register (once per run, and after every rebuild), status `ready`. A game whose cache is fresh and

@@ -9,6 +9,9 @@ if [[ "${1:-}" != --inside ]]; then
     -e CARGO_HOME=/work/target/ps5/cargo -v "$PWD:/work" kraken-mount-ps5 ps5/build.sh --inside
 fi
 
+# The bundled ampr-emu-ng must be the released file (SHA256SUMS copied from its GitHub release).
+(cd vendor/ampr-emu-ng && sha256sum -c --ignore-missing --strict SHA256SUMS)
+
 out=target/ps5
 cc="$PS5_PAYLOAD_SDK/bin/prospero-clang"
 mkdir -p "$out/shim"

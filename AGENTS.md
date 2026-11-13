@@ -10,8 +10,9 @@ screen without installing it, and at launch mounts the game's fakelib plus ampr-
 sandbox. Web UI on port 8097 (opened from the "Kraken Mount" home-screen tile).
 
 - Sources: debug FPKG `.pkg` files and game folders (plain, zstd or LZ4 AMPR packs). Nothing else.
-- ampr-emu-ng ("ng") is NOT built here: it is its own project. Its prebuilt
-  `libSceAmpr.sprx` goes into `/data/krakenmount/ampr/` on the console. Do not edit the ng project from here unless the task asks for it.
+- ampr-emu-ng ("ng") is NOT built here: it is its own project. Its released `libSceAmpr.sprx` is
+  bundled from `vendor/ampr-emu-ng/`; to update, replace the file, `SHA256SUMS` and `VERSION` from
+  the new GitHub release. A file put into `/data/krakenmount/ampr/` by hand overrides it. Do not edit the ng project from here unless the task asks for it.
 - References (read-only): ShadowMountPlus (SMP, the C original of the register/fakelib/backport
   logic) and ps5-dump-forge (toolchain, self copy, tile, toasts, UI patterns).
 

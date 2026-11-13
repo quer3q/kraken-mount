@@ -106,7 +106,7 @@ fn pak_path_hash(path: &[u8]) -> u64 {
 }
 
 /// CRC-32 (IEEE, reflected 0xEDB88320), as ampr-format `crc32_parts`.
-fn crc32(parts: &[&[u8]]) -> u32 {
+pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
     let mut table = [0u32; 256];
     for (i, t) in table.iter_mut().enumerate() {
         let mut v = i as u32;

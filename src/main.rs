@@ -226,6 +226,57 @@ fn save_self_copy() {
     }
 }
 
+/// The ampr-emu-ng release bundled in the ELF (vendor/ampr-emu-ng; ps5/build.sh checks its SHA-256).
+const BUNDLED_AMPR: &[u8] = include_bytes!("../vendor/ampr-emu-ng/libSceAmpr.sprx");
+const BUNDLED_AMPR_VERSION: &str = include_str!("../vendor/ampr-emu-ng/VERSION");
+/// "<len> <crc32>" of the bundled copy last written. Outside AMPR_DIR: every file there goes into fakelib/.
+const BUNDLED_MARK: &str = "/data/krakenmount/ampr.bundled";
+
+/// Puts the bundled libSceAmpr.sprx into AMPR_DIR when it is missing or is a bundled copy we wrote
+/// before (an older release). A file put there by hand (a debug build, say) is kept.
+fn install_bundled_ampr() {
+    let path = format!("{}/libSceAmpr.sprx", cache::AMPR_DIR);
+    let mark = |b: &[u8]| format!("{} {:08x}", b.len(), ampr_index::crc32(&[b]));
+    let write_mark = || {
+        if let Err(e) = std::fs::write(BUNDLED_MARK, mark(BUNDLED_AMPR)) {
+            log!("ampr: write {BUNDLED_MARK}: {e}");
+        }
+    };
+    match std::fs::read(&path) {
+        Ok(cur) if cur == BUNDLED_AMPR => {
+            if std::fs::read_to_string(BUNDLED_MARK).ok() != Some(mark(BUNDLED_AMPR)) {
+                write_mark();
+            }
+            return;
+        }
+        Ok(cur) if std::fs::read_to_string(BUNDLED_MARK).is_ok_and(|m| m == mark(&cur)) => {}
+        Ok(_) => {
+            log!("ampr: {path} is not a bundled ampr-emu-ng: kept (delete it to get {BUNDLED_AMPR_VERSION})");
+            return;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            log!("ampr: read {path}: {e}");
+            return;
+        }
+    }
+    // Temp file beside AMPR_DIR, not in it, so a scan never copies a half-written one.
+    let tmp = format!("{DATA_DIR}/libSceAmpr.sprx.tmp");
+    let r = std::fs::File::create(&tmp)
+        .and_then(|mut f| std::io::Write::write_all(&mut f, BUNDLED_AMPR).and_then(|()| f.sync_all()))
+        .and_then(|()| std::fs::rename(&tmp, &path));
+    match r {
+        Ok(()) => {
+            write_mark();
+            log!("ampr: installed bundled ampr-emu-ng {BUNDLED_AMPR_VERSION} ({} bytes) to {path}", BUNDLED_AMPR.len());
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            log!("ampr: install bundled ampr-emu-ng to {path}: {e}");
+        }
+    }
+}
+
 /// ampr files are loaded by every game's sandbox: 0777 like the caches. A libkernel.sprx there
 /// replaces the system one for every game, which is rarely wanted.
 fn prepare_ampr() {
@@ -260,6 +311,7 @@ fn main() {
         return;
     };
     toast(&s, "Kraken Mount started");
+    install_bundled_ampr();
     prepare_ampr();
     std::thread::spawn(save_self_copy);
     // ponytail: debug turned on later takes effect at the next start.

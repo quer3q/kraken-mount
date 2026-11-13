@@ -8,8 +8,9 @@ with zstd or LZ4).
 
 ## How to
 
-1. Put `libSceAmpr.sprx` from [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng) into
-   `/data/krakenmount/ampr/`. FPKG games cannot run without it.
+1. [ampr-emu-ng](https://github.com/quer3q/ampr-emu-ng) comes bundled and is installed into
+   `/data/krakenmount/ampr/` at start. To run another build, put its `libSceAmpr.sprx` there; it is
+   kept until you delete it.
 2. Put each game in a scan root: `/data/homebrew`, `/data/etaHEN/games`, or `homebrew`,
    `etaHEN/games` or the root of a USB drive. A `.pkg` must be a plaintext debug FPKG from
    dump-forge. A folder needs `eboot.bin` and `sce_sys/param.json`. Backports go in
