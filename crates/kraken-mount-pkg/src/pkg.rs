@@ -264,11 +264,12 @@ impl Image {
 
     /// Append the `.pkg` byte runs behind mount bytes `off..off + len` to `out`, in order,
     /// merging a run into the previous one (also one already in `out`) when they touch.
-    /// `Unsupported` when a block in the range is compressed (its bytes are not plaintext).
+    /// `Unsupported` when a block in the range is compressed or sparse (its bytes are not plaintext).
     pub fn extents(&self, off: u64, len: u64, out: &mut Vec<Extent>) -> Result<(), Error> {
         self.check_range(off, len)?;
         if let Some(b) = self.kraken.range(off, len).iter().find(|b| !b.raw()) {
-            return Err(unsupported(format!("the block at mount {:#x} is Kraken-compressed", b.logical)));
+            let what = if b.sparse() { "sparse" } else { "Kraken-compressed" };
+            return Err(unsupported(format!("the block at mount {:#x} is {what}", b.logical)));
         }
         for (at, n) in self.kraken.stored(off, len) {
             self.image.pkg_extents(at, n, out)?;

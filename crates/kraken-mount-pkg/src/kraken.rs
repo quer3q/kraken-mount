@@ -1,7 +1,8 @@
 //! The Kraken layout descriptor (`naps_pkg_layout.dat`), walked in chunks into a compact block
 //! list. Port of `VF/kraken_image.rs:728-1036` (`describe`) and `FP/mount.rs:35-283` (`KBlock`,
-//! `Kraken::new`, `stored`). Blocks may be raw or Kraken-compressed; byte shuffles and sparse
-//! extents are refused.
+//! `Kraken::new`, `stored`). Blocks may be raw or Kraken-compressed; byte shuffles are refused.
+//! A sparse extent (a boundary of kind 0x40 before the mount's end) becomes zero blocks with
+//! `stored_len` 0, the way ps5-dump-forge's `describe` reads one.
 
 use alloc::format;
 use alloc::vec;
@@ -25,7 +26,8 @@ const CHUNK: usize = 4096;
 const REPACK: &str = "repack with --kraken stored";
 
 /// One mount block: `len` logical bytes at `logical`, stored in `stored_len` bytes at
-/// `stored_at` in `pfs_image.dat`, decoded with `desc`.
+/// `stored_at` in `pfs_image.dat`, decoded with `desc`. `stored_len` 0 (with `stored_at` 0 and a
+/// default `desc`): a sparse block, all zeros, that nothing stores.
 #[derive(Clone, Copy)]
 pub(crate) struct KBlock {
     pub logical: u64,
@@ -36,6 +38,11 @@ pub(crate) struct KBlock {
 }
 
 impl KBlock {
+    /// A sparse block: zeros, nothing stored.
+    pub fn sparse(&self) -> bool {
+        self.stored_len == 0
+    }
+
     /// Stored as a plain copy of its logical bytes (no decoding needed).
     pub fn raw(&self) -> bool {
         self.stored_len == self.len
@@ -144,9 +151,28 @@ impl Kraken {
         if naps.size < (rec_at + records * 9) as u64 {
             return Err(corrupt("layout descriptor shorter than its records"));
         }
-        let (bounds, mount) = boundaries(io, naps, fidx_at, files, ublocks)?;
+        let (bounds, mount, sparse) = boundaries(io, naps, fidx_at, files, ublocks)?;
         let next_bound = |x: u64| {
             bounds.get(bounds.partition_point(|&b| b <= x)).copied().unwrap_or(mount)
+        };
+        // Where the chain of sparse extents starting at `x` ends (`x` itself when none starts there).
+        let hole_end = |mut x: u64| {
+            while let Ok(i) = sparse.binary_search_by_key(&x, |s| s.0) {
+                x = sparse[i].1;
+            }
+            x
+        };
+        // Zero blocks for the sparse extents that start at `logical`, up to the next boundary.
+        // No record describes them, so they are filled in before the block record that follows.
+        let fill = |logical: &mut u64, blocks: &mut Vec<KBlock>| {
+            while let Ok(i) = sparse.binary_search_by_key(&*logical, |s| s.0) {
+                let end = sparse[i].1;
+                while *logical < end {
+                    let len = (end - *logical).min(UBLOCK);
+                    blocks.push(KBlock { logical: *logical, stored_at: 0, len: len as u32, stored_len: 0, desc: Desc::default() });
+                    *logical += len;
+                }
+            }
         };
         let mut tag = [0u8; 3];
         naps.read(io, (rec_at - 3) as u64, &mut tag)?;
@@ -170,6 +196,7 @@ impl Kraken {
                 }
                 continue;
             }
+            fill(&mut logical, &mut blocks);
             if strict && i > 0 && nibble != logical & 0xF {
                 return Err(corrupt(format!("record {i}: the exact start's low nibble disagrees")));
             }
@@ -182,11 +209,19 @@ impl Kraken {
             let cap = logical + (next_bound(logical).min(mount) - logical).min(UBLOCK);
             let next = if f(66, 1) == 1 { i + 2 } else { i + 1 };
             let len = if next + 1 < records {
-                let at16 = (logical & !(WINDOW - 1)) | ((rec.get(next)? as u64 & 0x3FFF) << 4);
-                let at16 = if at16 <= logical & !0xF { at16 + WINDOW } else { at16 };
-                let low = if strict { (rec.get(next - 1)? >> 68) as u64 & 0xF } else { logical & 0xF };
-                let exact = at16 | low;
-                if at16 + 16 <= cap || (strict && exact < cap) { exact - logical } else { cap - logical }
+                let at = rec.get(next)? as u64 & 0x3FFF;
+                // A sparse extent starting at `cap`: the next record starts where it ends, and
+                // that window offset says nothing about this block (it can wrap into it).
+                let after = hole_end(cap);
+                if after != cap && (after % WINDOW) >> 4 == at {
+                    cap - logical
+                } else {
+                    let at16 = (logical & !(WINDOW - 1)) | (at << 4);
+                    let at16 = if at16 <= logical & !0xF { at16 + WINDOW } else { at16 };
+                    let low = if strict { (rec.get(next - 1)? >> 68) as u64 & 0xF } else { logical & 0xF };
+                    let exact = at16 | low;
+                    if at16 + 16 <= cap || (strict && exact < cap) { exact - logical } else { cap - logical }
+                }
             } else {
                 cap - logical
             };
@@ -219,6 +254,7 @@ impl Kraken {
             cursor = end;
             logical += len;
         }
+        fill(&mut logical, &mut blocks);
         if logical != mount {
             return Err(corrupt(format!("blocks tile to {logical:#x}, the mount is {mount:#x}")));
         }
@@ -228,17 +264,18 @@ impl Kraken {
 }
 
 /// The descriptor's boundary table (`fidx`, 6 B per entry: 40-bit mount offset, kind byte),
-/// read in chunks: the sorted, deduplicated boundaries and the mount's end (the last entry).
-/// A kind-0x40 boundary before the end opens a sparse extent, which this MVP refuses.
+/// read in chunks: the sorted, deduplicated boundaries, the mount's end (the last entry) and the
+/// sparse extents `(start, end)`, sorted by start. A kind-0x40 boundary before the end opens a
+/// sparse extent that runs to the next boundary; nothing is stored for it.
 fn boundaries<R: PRead>(
     io: &R,
     naps: &OuterFile,
     fidx_at: usize,
     files: usize,
     ublocks: u64,
-) -> Result<(Vec<u64>, u64), Error> {
+) -> Result<(Vec<u64>, u64, Vec<(u64, u64)>), Error> {
     let mut bounds = Vec::with_capacity(files);
-    let mut sparse_at: Option<u64> = None;
+    let mut holes: Vec<u64> = Vec::new();
     let mut buf = vec![0u8; CHUNK * 6];
     let mut done = 0usize;
     while done < files {
@@ -248,7 +285,7 @@ fn boundaries<R: PRead>(
         for r in chunk.chunks_exact(6) {
             let off = u64::from_le_bytes([r[0], r[1], r[2], r[3], r[4], 0, 0, 0]);
             if r[5] == 0x40 {
-                sparse_at = Some(sparse_at.map_or(off, |a: u64| a.min(off)));
+                holes.push(off);
             }
             bounds.push(off);
         }
@@ -258,12 +295,19 @@ fn boundaries<R: PRead>(
     if mount.div_ceil(UBLOCK) != ublocks || bounds.iter().any(|&b| b > mount) {
         return Err(corrupt("the boundary table disagrees with the mount's size"));
     }
-    // The mount's end carries kind 0x40 too; only one before it is a hole.
-    if let Some(at) = sparse_at.filter(|&a| a < mount) {
-        return Err(unsupported(format!("the layout has a sparse extent at mount {at:#x}; {REPACK}")));
-    }
     bounds.sort_unstable();
     bounds.dedup();
     bounds.shrink_to_fit();
-    Ok((bounds, mount))
+    // The mount's end carries kind 0x40 too; only one before it is a hole. The mount's size
+    // matching the ublock count (above) bounds the zero blocks a forged table can ask for.
+    // ponytail: a hole is taken to run to the next boundary (as ps5-dump-forge reads it); a
+    // layout where it ends elsewhere would tile wrongly and be refused by the checks in `open`.
+    let mut sparse: Vec<(u64, u64)> = holes
+        .into_iter()
+        .filter(|&a| a < mount)
+        .map(|a| (a, bounds.get(bounds.partition_point(|&b| b <= a)).copied().unwrap_or(mount)))
+        .collect();
+    sparse.sort_unstable();
+    sparse.dedup_by_key(|s| s.0);
+    Ok((bounds, mount, sparse))
 }
