@@ -130,6 +130,9 @@ SMP port: copy `sce_sys` to `/user/app/<TID>/sce_sys` + `icon0.png`, appmeta, tr
 nullfs `app0 -> /system_ex/app/<TID>` (app0 = cache dir for FPKG, game folder for Folder),
 for a Folder with a backport a unionfs of the backport dir on top (SMP
 `mount_backport_overlay`), then `sceAppInstUtilAppInstallTitleDir` (fallback InstallAll).
+`/system_ex` is read-only unless etaHEN, SMP or kstuff-lite remounted it (elfldr does not): when
+`mkdir /system_ex/app/<TID>` fails with EROFS, register remounts it once like SMP `remount_system_ex`
+(`nmount` MNT_UPDATE of `/dev/ssd0.system_ex`) and retries. An existing title dir (EEXIST) needs no remount.
 
 ## Launch (`src/launch.rs`)
 As before (SMP sm_fakelib port): unionfs of `caches/<TID>/fakelib` (when non-empty) over the sandbox's

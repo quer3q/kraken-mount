@@ -157,6 +157,16 @@ pub fn unmount_title(tid: &str) -> io::Result<()> {
     }
 }
 
+/// SMP remount_system_ex: nmount(MNT_UPDATE) of /system_ex without MNT_RDONLY makes it writable.
+/// ponytail: the device and options are SMP's (also etaHEN's, kstuff-lite's); no other layout is tried.
+fn remount_system_ex() -> io::Result<()> {
+    let opts = [
+        ("from", Some("/dev/ssd0.system_ex")), ("fspath", Some("/system_ex")), ("fstype", Some("exfatfs")),
+        ("large", Some("yes")), ("timezone", Some("static")), ("async", None), ("ignoreacl", None),
+    ];
+    crate::sys::nmount_opt(&opts, libc::MNT_UPDATE as i32)
+}
+
 /// SMP mount_title_nullfs: `src` must be a dir with eboot.bin or eboot2.bin; mkdir
 /// /system_ex/app/<TID> 0755, then nmount(fstype=nullfs, from, fspath, flags 0). Any other
 /// mount at the target (another tool's copy, a stale nullfs of a rebuilt cache, an old
@@ -170,7 +180,18 @@ fn mount_title_nullfs(title_id: &str, src: &str) -> io::Result<()> {
         return Err(err(format!("nullfs source {src} has no eboot.bin/eboot2.bin")));
     }
     let dst = format!("{SYSTEM_EX_APP}/{title_id}");
-    match fs::DirBuilder::new().mode(0o755).create(&dst) {
+    let mk = || fs::DirBuilder::new().mode(0o755).create(&dst);
+    let made = match mk() {
+        // /system_ex is read-only until a tool remounts it (etaHEN, SMP and kstuff-lite do at
+        // start-up, elfldr does not). An existing title dir never gets here: mkdir says EEXIST first.
+        Err(e) if e.raw_os_error() == Some(libc::EROFS) => {
+            log!("{title_id}: mkdir {dst}: {e}; remounting /system_ex read-write");
+            ctx(remount_system_ex(), || "remount /system_ex".to_string())?;
+            mk()
+        }
+        r => r,
+    };
+    match made {
         Ok(()) => {}
         Err(e) if e.kind() == ErrorKind::AlreadyExists => match fs::metadata(&dst) {
             Ok(m) if !m.is_dir() => return Err(err(format!("mount target {dst} is not a directory"))),
