@@ -56,6 +56,9 @@ Invalid values are logged and replaced by the default. The web UI edits the same
   newline: `kraken/<pkg file name>`, relative to `/app0`, the file ng opens; missing means stale), `ampr_emu.index` +
   `ampr_assets.index` (`src/ampr_index.rs`; every non-extracted file packed, fakelib and
   backport files loose). Backport files (except its fakelib) are copied loose over pkg files.
+  A file made only of sparse blocks (the layout stores nothing for it: zeros, from a boundary
+  of kind 0x40) is extracted as a hole of its size. A file mixing sparse and stored blocks is
+  refused: it needs zero chunks in the ampr index and in ng.
   The dir itself is never deleted: `/system_ex/app/<TID>` is a nullfs of it.
 - `/app0` is writable, so a game may write into its cache (pkg) or its dump folder (folder, also on
   USB). `.built` (written before `.done`) lists what the build created; a rebuild removes only those

@@ -205,6 +205,11 @@ fn file_blocks(image: &pkg::Image, w: &tree::Walked, tmp: &mut Vec<Extent>, out:
         return Err(alloc::format!("{}: its data (mount {:#x}) does not start on a block boundary", w.path, w.logical));
     }
     for b in range {
+        if b.sparse() {
+            // A sparse block: zeros, nothing in the .pkg to point at.
+            out.push(Block { raw_len: b.len, pkg_off: 0, stored_len: 0, compressed: true, desc: b.desc });
+            continue;
+        }
         tmp.clear();
         image.image.pkg_extents(b.stored_at, u64::from(b.stored_len), tmp).map_err(|e| alloc::format!("{}: {e}", w.path))?;
         let [run] = tmp.as_slice() else {
@@ -239,7 +244,9 @@ pub struct Extent {
 
 /// One Kraken block of a file: `raw_len` logical bytes, stored as `stored_len` contiguous bytes
 /// at `pkg_off` in the `.pkg`. A raw block's stored bytes are its logical bytes
-/// (`stored_len == raw_len`); a compressed one needs `kraken::decode_block`. Only a file's last
+/// (`stored_len == raw_len`); a compressed one needs `kraken::decode_block`. `stored_len == 0`
+/// (`pkg_off` 0, a default `desc`, `compressed`): a sparse block that reads as zeros and has no
+/// stored bytes; `decode_block` of an empty source gives those zeros. Only a file's last
 /// block can extend past its end; the bytes beyond the file's size belong to no file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Block {
@@ -249,6 +256,13 @@ pub struct Block {
     pub compressed: bool,
     /// Decode fields for `kraken::decode_block` (meaningful when `compressed`).
     pub desc: crate::decoder::Desc,
+}
+
+impl Block {
+    /// A sparse block: zeros, nothing stored in the `.pkg`.
+    pub fn sparse(&self) -> bool {
+        self.stored_len == 0
+    }
 }
 
 impl Pkg {
@@ -294,7 +308,7 @@ impl Pkg {
         match self.file(e) {
             None => Ok(&[]),
             Some(n) if n.ext_ok => Ok(&self.extents[n.ext_start as usize..n.ext_end as usize]),
-            Some(_) => Err(pkg::unsupported(alloc::format!("{}: has Kraken-compressed blocks, no plaintext extents", e.path))),
+            Some(_) => Err(pkg::unsupported(alloc::format!("{}: has Kraken-compressed or sparse blocks, no plaintext extents", e.path))),
         }
     }
 

@@ -106,6 +106,12 @@ fn extract<R: PRead>(p: &Pkg, io: &R, e: &Entry, dest: &Path, buf: &mut [u8]) ->
         fs::create_dir_all(parent)?;
     }
     let mut out = File::create(dest)?;
+    // A file of only sparse blocks (zeros, nothing stored): a hole of its size, no zeros written.
+    if is_hole(p, e) {
+        out.set_len(e.size)?;
+        drop(out);
+        return exec_mode(dest);
+    }
     let mut off = 0u64;
     while off < e.size {
         let n = p.read_at(io, e, off, buf).map_err(vfs)?;
@@ -119,6 +125,13 @@ fn extract<R: PRead>(p: &Pkg, io: &R, e: &Entry, dest: &Path, buf: &mut [u8]) ->
     exec_mode(dest)
 }
 
+/// True when `e` is made only of sparse blocks (the layout stores nothing for it: all zeros).
+/// Such a file is extracted as a hole: the ampr index cannot point a chunk at bytes that are not
+/// in the .pkg, and a hole costs no space in the cache.
+fn is_hole(p: &Pkg, e: &Entry) -> bool {
+    p.blocks(e).map_or(false, |b| !b.is_empty() && b.iter().all(|b| b.sparse()))
+}
+
 /// 0777, like SMP's fakelib copies: the PS5 loader refuses a module whose file has no
 /// execute bits ("mount flag / attribute error", va_mode 0666).
 fn exec_mode(path: &Path) -> Result<()> {
@@ -129,6 +142,11 @@ fn exec_mode(path: &Path) -> Result<()> {
 /// `e`'s Kraken blocks as index chunks.
 fn chunks(p: &Pkg, e: &Entry) -> Result<Vec<Chunk>> {
     let blocks = p.blocks(e).map_err(vfs)?;
+    // ponytail: a file mixing sparse and stored blocks is refused, not copied whole: its zeros
+    // need zero chunks in the ampr index and in ng, which neither has yet.
+    if blocks.iter().any(|b| b.sparse()) {
+        return Err(bad(format!("{}: has sparse blocks between stored ones; the ampr index cannot serve zero chunks yet", e.path)));
+    }
     let mut out = Vec::with_capacity(blocks.len());
     for b in blocks {
         let kraken = b.compressed.then_some(Kraken { even_len: b.desc.even_len, mode: b.desc.mode });
@@ -566,7 +584,7 @@ fn build_inner(src: &Source, s: &Settings, before: &HashSet<PathBuf>) -> Result<
             if LIB_DIRS.iter().any(|d| lower.starts_with(d)) {
                 continue;
             }
-            let chunks = if extracted(e.path) {
+            let chunks = if extracted(e.path) || is_hole(p, &e) {
                 extract(p, io, &e, &dir.join(e.path), &mut buf)?;
                 None
             } else {
