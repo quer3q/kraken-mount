@@ -309,6 +309,11 @@ impl Pkg {
         }
     }
 
+    pub fn has_sparse(&self, e: &Entry) -> bool {
+        self.file(e).is_some_and(|n| !n.ext_ok && n.size != 0
+            && self.image.kraken.range(n.logical, n.size).iter().any(|b| b.stored_len == 0))
+    }
+
     /// Up to `buf.len()` bytes of `e` at `off`; 0 at or past its end. A file with only raw
     /// blocks is read in place with no allocation; a compressed one allocates its buffers.
     pub fn read_at<R: PRead>(&self, io: &R, e: &Entry, off: u64, buf: &mut [u8]) -> Result<usize, Error> {

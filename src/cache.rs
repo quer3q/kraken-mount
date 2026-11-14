@@ -566,7 +566,7 @@ fn build_inner(src: &Source, s: &Settings, before: &HashSet<PathBuf>) -> Result<
             if LIB_DIRS.iter().any(|d| lower.starts_with(d)) {
                 continue;
             }
-            let chunks = if extracted(e.path) {
+            let chunks = if extracted(e.path) || p.has_sparse(&e) {
                 extract(p, io, &e, &dir.join(e.path), &mut buf)?;
                 None
             } else {

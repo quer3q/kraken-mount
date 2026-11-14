@@ -10,6 +10,7 @@ and installed into `/data/krakenmount/ampr/` at start.
 
 ## Supported sources (nothing else)
 - **FPKG**: a dump-forge debug `.pkg` file directly in a scan root.
+  Sparse layout extents are read as zeros.
 - **Folder**: a directory directly in a scan root with `eboot.bin` and `sce_sys/param.json`.
   Packing: `ampr_zstd.index` present = zstd, else `ampr_assets.index` = lz4, else plain.
 - Any drive. The cache is always on the internal SSD.
@@ -56,6 +57,7 @@ Invalid values are logged and replaced by the default. The web UI edits the same
   newline: `kraken/<pkg file name>`, relative to `/app0`, the file ng opens; missing means stale), `ampr_emu.index` +
   `ampr_assets.index` (`src/ampr_index.rs`; every non-extracted file packed, fakelib and
   backport files loose). Backport files (except its fakelib) are copied loose over pkg files.
+  Files overlapping sparse extents are extracted loose instead of packed in the index.
   The dir itself is never deleted: `/system_ex/app/<TID>` is a nullfs of it.
 - `/app0` is writable, so a game may write into its cache (pkg) or its dump folder (folder, also on
   USB). `.built` (written before `.done`) lists what the build created; a rebuild removes only those
