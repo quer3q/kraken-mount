@@ -7,6 +7,7 @@ pub const CONFIG_PATH: &str = "/data/krakenmount/config.toml";
 #[derive(Clone, PartialEq, Debug)]
 pub struct Settings {
     pub scan_paths: Vec<String>,
+    pub auto_import_installed: bool,
     pub inject_ampr: bool,
     pub add_emulators: bool,
     pub ampr_auto_update: bool,
@@ -28,6 +29,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             scan_paths: Vec::new(),
+            auto_import_installed: true,
             inject_ampr: true,
             add_emulators: true,
             ampr_auto_update: true,
@@ -47,6 +49,7 @@ impl Default for Settings {
 
 const HELP: &[(&str, &str)] = &[
     ("scanpath", "replaces the default scan roots (/data/homebrew, /data/etaHEN/games, <drive>/homebrew, ...)"),
+    ("auto_import_installed", "true = also list packages the system installed (/user/app/<TID>/app.pkg and the extended-storage roots; they stay in place)"),
     ("inject_ampr", "true = copy /data/krakenmount/ampr/* on top of a folder game's fakelib (pkg games always get it; a change only refreshes fakelib/)"),
     ("add_emulators", "true = add the bundled DLC (dlc_emu) and PlayGo (pgo_stub) emulators to a game's fakelib when it needs them and ships none (a change only refreshes fakelib/)"),
     ("ampr_auto_update", "true = once per start, download a newer ampr-emu-ng release from GitHub (a hand-placed libSceAmpr.sprx is kept)"),
@@ -85,6 +88,7 @@ fn set(s: &mut Settings, key: &str, v: &str) -> Result<(), String> {
             }
         }
         "scanpath" => return Err(format!("expected an absolute path, got {v:?}")),
+        "auto_import_installed" => s.auto_import_installed = flag(v)?,
         "inject_ampr" => s.inject_ampr = flag(v)?,
         "add_emulators" => s.add_emulators = flag(v)?,
         "ampr_auto_update" => s.ampr_auto_update = flag(v)?,
@@ -254,6 +258,7 @@ fn render(s: &Settings) -> String {
                 let items: Vec<String> = s.scan_paths.iter().map(|p| toml_quote(p)).collect();
                 out += &format!("scanpath = [{}]\n", items.join(", "));
             }
+            "auto_import_installed" => out += &format!("{k} = {}\n", s.auto_import_installed),
             "inject_ampr" => out += &format!("{k} = {}\n", s.inject_ampr),
             "add_emulators" => out += &format!("{k} = {}\n", s.add_emulators),
             "ampr_auto_update" => out += &format!("{k} = {}\n", s.ampr_auto_update),
@@ -303,6 +308,7 @@ pub fn save(s: &Settings) -> std::io::Result<()> {
 pub fn to_json(s: &Settings) -> Value {
     json!({
         "scanpath": s.scan_paths,
+        "auto_import_installed": s.auto_import_installed,
         "inject_ampr": s.inject_ampr,
         "add_emulators": s.add_emulators,
         "ampr_auto_update": s.ampr_auto_update,

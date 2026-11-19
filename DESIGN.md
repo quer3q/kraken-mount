@@ -48,11 +48,22 @@ SMP `sm_usb_mount_path`). The request goes to the system automounter over IPMI t
 in `ps5/usb.c` (`km_usb_eject`, a port of SMP `sm_usb.c`), which checks the mount still has the
 source and fsid seen at request time; the payload never unmounts the drive itself.
 
+Packages installed by the system (`src/installed.rs`, setting `auto_import_installed`) are found
+separately from the scan roots: `/user/app/<TID>/app.pkg` and the same layout under
+`/mnt/ext0/user/app`, `/mnt/ext0/ps5/user/app`, `/mnt/ext1/user/app` and `/mnt/ext1/ps5/user/app`
+(a regular file under a title-id directory, both matching the pkg's own `param.json` title id).
+They join the scan as ordinary pkg sources and are built, registered and launched from their
+original path: nothing is copied, moved or deleted, and `/api/delete` refuses them. Before the pkg
+is read, a restricted install gets the missing read bits (pkg +0444, its directory +0555; bits are
+only added, as `fix_access`); the title id and size are rechecked, and a symlink or another file
+name is refused. A copy found in a scan root keeps the usual duplicate rule and wins over them.
+
 ## Settings (`src/config.rs`, file `/data/krakenmount/config.toml`)
 A flat TOML subset: `key = value` with strings, `true`/`false`, integers and arrays of strings; `#` comments.
 | Key | Default | Meaning |
 |---|---|---|
 | `scanpath` | (defaults above) | array of paths; replaces the default scan roots |
+| `auto_import_installed` | true | also list packages the system installed (`/user/app/<TID>/app.pkg` and the extended-storage roots) as games, in place |
 | `inject_ampr` | true | copy `/data/krakenmount/ampr/*` on top of a folder game's fakelib; pkg games always get it (pkg mode exists only in ampr-emu-ng) (a change only refreshes `fakelib/`) |
 | `add_emulators` | true | add the bundled DLC (dlc_emu) and PlayGo (pgo_stub) emulators to a game's fakelib when it needs them and ships none (a change only refreshes `fakelib/`) |
 | `ampr_auto_update` | true | once per start, download a newer ampr-emu-ng release from GitHub (a hand-placed `libSceAmpr.sprx` is kept) |
@@ -260,7 +271,8 @@ No overlay when neither layer applies.
 // config.rs
 pub const CONFIG_PATH: &str = "/data/krakenmount/config.toml";
 #[derive(Clone, PartialEq, Debug)]
-pub struct Settings { pub scan_paths: Vec<String>, pub inject_ampr: bool, pub add_emulators: bool,
+pub struct Settings { pub scan_paths: Vec<String>, pub auto_import_installed: bool,
+  pub inject_ampr: bool, pub add_emulators: bool,
   pub ampr_auto_update: bool,
   pub backports: bool, pub scan_interval_secs: u64, pub stability_wait_secs: u64, pub low_space_gb: u64,
   pub auto_remove_missing: bool, pub auto_remove_delay_secs: u64, pub notify: bool, pub log: bool, pub debug: bool }
@@ -288,10 +300,16 @@ pub struct Source { pub path: std::path::PathBuf, pub kind: Kind, pub title_id: 
   pub drive: String, pub size: u64 /* pkg file size; folder: 0 */, pub backport: Option<std::path::PathBuf> }
 pub struct ScanResult { pub games: Vec<Source>, pub duplicates: Vec<Source>, pub errors: Vec<(std::path::PathBuf, String)>,
   pub unstable: Vec<(std::path::PathBuf, Option<String> /* title id when known */)> } // still being copied: skipped, not gone
-pub fn scan(roots: &[String], backports: bool, stability_wait: u64) -> ScanResult;  // memoizes pkg param reads by (path, size, mtime)
+pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_installed: bool) -> ScanResult;  // memoizes pkg param reads by (path, size, mtime)
+pub fn installed_source(path: &std::path::Path, expected: &str) -> std::io::Result<Source>; // a system-installed pkg, in place
 pub fn still_written(paths: &[std::path::PathBuf], wait: u64) -> Option<u64>; // age in s of the youngest max(mtime, ctime) under wait; None = stable
 pub fn parse_param(json: &[u8]) -> std::io::Result<(String, String, String)>; // (title_id, title_name, version); name: see below
 pub fn valid_tid(t: &str) -> bool;
+
+// installed.rs (packages the system installed, kept in place)
+pub fn package_path(path: &std::path::Path) -> bool;        // <app root>/<TID>/app.pkg, valid title id
+pub fn paths() -> Vec<(std::path::PathBuf, String)>;         // every installed package, in title-id order
+pub fn prepare(path: &std::path::Path, tid: &str, size: u64) -> std::io::Result<()>; // adds missing read bits only
 
 // cache.rs
 pub const CACHES: &str = "/data/krakenmount/caches";
@@ -344,7 +362,7 @@ pub fn https_get(url: &str, max: usize) -> std::io::Result<Vec<u8>>;
   the rest `no-store`.
 - `GET /api/state`:
   `{version, busy, paused, waiting:"kstuff"|"shadowmount"|null, running:[TID], games:[{title_id, title_name, version, path, kind:"pkg"|"folder", packing:"plain"|"zstd"|"lz4"|null,
-  drive, size, status:"pending"|"checking"|"building"|"ready"|"error"|"duplicate", error, cache_size, cache_built, backport}],
+  drive, size, installed_pkg: bool, status:"pending"|"checking"|"building"|"ready"|"error"|"duplicate", error, cache_size, cache_built, backport}],
   drives:[{mount, label, kind, total, free, ejectable}], cache:{path, size, free, low_space, ampr_present}, log:[last 100 lines of the last 64 KiB]}`
 - `GET /api/settings` -> settings JSON; `POST /api/settings` (JSON body) -> save, apply, rescan.
 - `GET /api/ampr` -> `{kind: "bundled"|"downloaded"|"hand"|"missing"|"error", version, updating}` of
@@ -361,7 +379,7 @@ pub fn https_get(url: &str, max: usize) -> std::io::Result<Vec<u8>>;
   404 for an invalid or absent library title, 409 while the scan loop is in a pass (it holds
   `State::work` for scan, purge, build and register; delete only try-locks it), when the body is not
   the current library source, while a game runs, this title builds, the source path is unsafe, or
-  its title mount cannot be unmounted; 500 on source or cache deletion failure. It validates the
+  its title mount cannot be unmounted, or the source is a package the system installed; 500 on source or cache deletion failure. It validates the
   source is inside a scan root with no symlink from the root down (links above the root are not checked), and is a .pkg file or game
   directory, then unmounts `/system_ex/app/<TID>` without force and deletes the source. If that
   fails, the cache and tile stay and the next pass remounts the title (a folder partly removed stays so).

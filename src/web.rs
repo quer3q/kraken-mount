@@ -121,6 +121,7 @@ fn game_json(g: &Game) -> serde_json::Value {
         "path": g.src.path.to_string_lossy(),
         "kind": kind,
         "packing": packing,
+        "installed_pkg": crate::installed::package_path(&g.src.path),
         "drive": g.src.drive,
         "size": g.src.size,
         "status": g.status,
@@ -550,6 +551,11 @@ fn delete(state: &State, tid: &str, body: &[u8]) -> Reply {
         return reply(409, "text/plain", "a scan or build is in progress; try again in a moment");
     };
     let Some(src) = state.source(tid) else { return not_found() };
+    // A package the system installed belongs to the system: never delete it from here.
+    if crate::installed::package_path(&src.path) {
+        log!("{tid}: delete refused: {} is an installed package", src.path.display());
+        return reply(409, "text/plain", "installed games are managed by the system; this only deletes scan sources");
+    }
     // The UI sends the path it showed in the confirmation; a scan may have picked another copy since.
     if body != src.path.as_os_str().as_encoded_bytes() {
         log!("{tid}: delete refused: asked for {:?}, library source is {}", String::from_utf8_lossy(body), src.path.display());

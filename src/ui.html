@@ -440,6 +440,7 @@ button:disabled { opacity: 0.5; cursor: default; }
     <label class="row col"><span class="lbl" data-i18n="scanPaths">Scan paths</span>
       <span class="hint" data-i18n="scanPathsHint">One per line. Empty = default roots (/data/homebrew, /data/etaHEN/games, each drive's homebrew, etaHEN/games and root).</span>
       <textarea id="f_scanpath" spellcheck="false"></textarea></label>
+    <label class="row"><span class="lbl" data-i18n="autoImportInstalled">List games installed on this console (/user/app), in place</span><input type="checkbox" id="f_auto_import_installed"></label>
     <label class="row"><span class="lbl" data-i18n="addEmulators">Add the bundled DLC (dlc_emu) and PlayGo (pgo_stub) emulators when a game needs them and has none</span><input type="checkbox" id="f_add_emulators"></label>
     <label class="row"><span class="lbl" data-i18n="injectAmpr">Inject ampr-emu-ng into folder games' fakelib (pkg games always get it)</span><input type="checkbox" id="f_inject_ampr"></label>
     <label class="row"><span class="lbl" data-i18n="amprAutoUpdate">Auto-update ampr-emu-ng (checked once at start)</span><input type="checkbox" id="f_ampr_auto_update"></label>
@@ -534,7 +535,7 @@ var MSG = {
     stopped: 'Kraken Mount stopped. Open the Kraken Mount tile to start it again.',
     // Library: filters, drives, cards, empty state, log
     prevFilter: 'Previous filter (L2)', nextFilter: 'Next filter (R2)', sourceType: 'Source type',
-    kindAll: 'All', kindFolders: 'Folders', badgeFolder: 'Folder',
+    kindAll: 'All', kindFolders: 'Folders', badgeFolder: 'Folder', badgeInstalled: 'Installed',
     driveInternal: 'Internal', driveUsb: 'USB {n}', driveExt: 'Extended {n}',
     driveFree: 'free {free} of {total}',
     eject: 'Unmount', ejecting: 'Unmounting...', ejectAria: 'Unmount {drive}', ejectTitle: 'Unmount {drive}?',
@@ -577,6 +578,7 @@ var MSG = {
     rescan: 'Rescan', rebuildAll: 'Rebuild all',
     scanPaths: 'Scan paths',
     scanPathsHint: "One per line. Empty = default roots (/data/homebrew, /data/etaHEN/games, each drive's homebrew, etaHEN/games and root).",
+    autoImportInstalled: 'List games installed on this console (/user/app), in place',
     addEmulators: 'Add the bundled DLC (dlc_emu) and PlayGo (pgo_stub) emulators when a game needs them and has none',
     injectAmpr: "Inject ampr-emu-ng into folder games' fakelib (pkg games always get it)",
     amprAutoUpdate: 'Auto-update ampr-emu-ng (checked once at start)',
@@ -620,7 +622,7 @@ var MSG = {
     waitKstuff: 'Ожидание kstuff: он ещё не запущен. Игры появятся после его запуска.', waitSmp: 'Запущен ShadowMount+: остановите его, чтобы использовать Kraken Mount. Игры появятся после его остановки.',
     stopped: 'Kraken Mount остановлен. Чтобы запустить его снова, откройте плитку Kraken Mount.',
     prevFilter: 'Предыдущий фильтр (L2)', nextFilter: 'Следующий фильтр (R2)', sourceType: 'Тип источника',
-    kindAll: 'Все', kindFolders: 'Папки', badgeFolder: 'Папка',
+    kindAll: 'Все', kindFolders: 'Папки', badgeFolder: 'Папка', badgeInstalled: 'Установлена',
     driveInternal: 'Внутренний', driveUsb: 'USB {n}', driveExt: 'Расширенный {n}',
     driveFree: 'свободно {free} из {total}',
     eject: 'Размонтировать', ejecting: 'Размонтирование...', ejectAria: 'Размонтировать {drive}', ejectTitle: 'Размонтировать {drive}?',
@@ -660,6 +662,7 @@ var MSG = {
     rescan: 'Пересканировать', rebuildAll: 'Пересобрать все',
     scanPaths: 'Пути сканирования',
     scanPathsHint: 'По одному на строку. Пусто = корни по умолчанию (/data/homebrew, /data/etaHEN/games, на каждом накопителе homebrew, etaHEN/games и корень).',
+    autoImportInstalled: 'Показывать установленные на консоли игры (/user/app), на месте',
     addEmulators: 'Добавлять встроенные эмуляторы DLC (dlc_emu) и PlayGo (pgo_stub), если они нужны игре и у неё их нет',
     injectAmpr: 'Внедрять ampr-emu-ng в fakelib игр-папок (pkg-игры получают его всегда)',
     amprAutoUpdate: 'Автообновление ampr-emu-ng (проверка один раз при запуске)',
@@ -703,7 +706,7 @@ var MSG = {
     waitKstuff: '正在等待 kstuff：它尚未运行。启动后游戏将会显示。', waitSmp: 'ShadowMount+ 正在运行：请停止它以使用 Kraken Mount。停止后游戏将会显示。',
     stopped: 'Kraken Mount 已停止。打开 Kraken Mount 磁贴即可再次启动。',
     prevFilter: '上一个筛选 (L2)', nextFilter: '下一个筛选 (R2)', sourceType: '来源类型',
-    kindAll: '全部', kindFolders: '文件夹', badgeFolder: '文件夹',
+    kindAll: '全部', kindFolders: '文件夹', badgeFolder: '文件夹', badgeInstalled: '已安装',
     driveInternal: '内部', driveUsb: 'USB {n}', driveExt: '扩展 {n}',
     driveFree: '可用 {free}，共 {total}',
     eject: '弹出', ejecting: '正在弹出...', ejectAria: '弹出 {drive}', ejectTitle: '弹出 {drive}？',
@@ -743,6 +746,7 @@ var MSG = {
     rescan: '重新扫描', rebuildAll: '全部重建',
     scanPaths: '扫描路径',
     scanPathsHint: '每行一个。留空 = 默认根目录（/data/homebrew、/data/etaHEN/games，以及每个驱动器的 homebrew、etaHEN/games 和根目录）。',
+    autoImportInstalled: '列出本机已安装的游戏（/user/app），保持原位',
     addEmulators: '当游戏需要且自身没有时，添加内置的 DLC (dlc_emu) 和 PlayGo (pgo_stub) 模拟器',
     injectAmpr: '将 ampr-emu-ng 注入文件夹游戏的 fakelib（pkg 游戏始终注入）',
     amprAutoUpdate: '自动更新 ampr-emu-ng（启动时检查一次）',
@@ -786,7 +790,7 @@ var MSG = {
     waitKstuff: 'Warte auf kstuff: Es läuft noch nicht. Die Spiele erscheinen, sobald es startet.', waitSmp: 'ShadowMount+ läuft: Beenden Sie es, um Kraken Mount zu nutzen. Die Spiele erscheinen, sobald es beendet ist.',
     stopped: 'Kraken Mount wurde beendet. Öffnen Sie die Kachel Kraken Mount, um es erneut zu starten.',
     prevFilter: 'Vorheriger Filter (L2)', nextFilter: 'Nächster Filter (R2)', sourceType: 'Quelltyp',
-    kindAll: 'Alle', kindFolders: 'Ordner', badgeFolder: 'Ordner',
+    kindAll: 'Alle', kindFolders: 'Ordner', badgeFolder: 'Ordner', badgeInstalled: 'Installiert',
     driveInternal: 'Intern', driveUsb: 'USB {n}', driveExt: 'Erweitert {n}',
     driveFree: '{free} von {total} frei',
     eject: 'Aushängen', ejecting: 'Wird ausgehängt...', ejectAria: '{drive} aushängen', ejectTitle: '{drive} aushängen?',
@@ -826,6 +830,7 @@ var MSG = {
     rescan: 'Neu scannen', rebuildAll: 'Alle neu erstellen',
     scanPaths: 'Scan-Pfade',
     scanPathsHint: 'Einer pro Zeile. Leer = Standardorte (/data/homebrew, /data/etaHEN/games, auf jedem Laufwerk homebrew, etaHEN/games und das Stammverzeichnis).',
+    autoImportInstalled: 'Auf der Konsole installierte Spiele (/user/app) an ihrem Ort auflisten',
     addEmulators: 'Mitgelieferte DLC- (dlc_emu) und PlayGo-Emulatoren (pgo_stub) hinzufügen, wenn ein Spiel sie braucht und keine hat',
     injectAmpr: 'ampr-emu-ng in die fakelib von Ordner-Spielen einfügen (pkg-Spiele erhalten es immer)',
     amprAutoUpdate: 'ampr-emu-ng automatisch aktualisieren (einmal beim Start geprüft)',
@@ -869,7 +874,7 @@ var MSG = {
     waitKstuff: 'Esperando a kstuff: aún no se está ejecutando. Los juegos aparecerán cuando se inicie.', waitSmp: 'ShadowMount+ está en ejecución: detenlo para usar Kraken Mount. Los juegos aparecerán cuando se detenga.',
     stopped: 'Kraken Mount se ha detenido. Abre el icono de Kraken Mount para iniciarlo de nuevo.',
     prevFilter: 'Filtro anterior (L2)', nextFilter: 'Filtro siguiente (R2)', sourceType: 'Tipo de origen',
-    kindAll: 'Todos', kindFolders: 'Carpetas', badgeFolder: 'Carpeta',
+    kindAll: 'Todos', kindFolders: 'Carpetas', badgeFolder: 'Carpeta', badgeInstalled: 'Instalado',
     driveInternal: 'Interno', driveUsb: 'USB {n}', driveExt: 'Ampliado {n}',
     driveFree: 'libre: {free} de {total}',
     eject: 'Desmontar', ejecting: 'Desmontando...', ejectAria: 'Desmontar {drive}', ejectTitle: '¿Desmontar {drive}?',
@@ -909,6 +914,7 @@ var MSG = {
     rescan: 'Volver a escanear', rebuildAll: 'Recrear todo',
     scanPaths: 'Rutas de escaneo',
     scanPathsHint: 'Una por línea. Vacío = raíces predeterminadas (/data/homebrew, /data/etaHEN/games y, en cada unidad, homebrew, etaHEN/games y la raíz).',
+    autoImportInstalled: 'Listar los juegos instalados en la consola (/user/app), sin moverlos',
     addEmulators: 'Añadir los emuladores incluidos de DLC (dlc_emu) y PlayGo (pgo_stub) cuando un juego los necesita y no los trae',
     injectAmpr: 'Inyectar ampr-emu-ng en la fakelib de los juegos en carpeta (los juegos pkg siempre lo reciben)',
     amprAutoUpdate: 'Actualizar ampr-emu-ng automáticamente (se comprueba una vez al iniciar)',
@@ -952,7 +958,7 @@ var MSG = {
     waitKstuff: 'En attente de kstuff : il n\'est pas encore lancé. Les jeux apparaîtront dès son démarrage.', waitSmp: 'ShadowMount+ est en cours d\'exécution : arrêtez-le pour utiliser Kraken Mount. Les jeux apparaîtront dès son arrêt.',
     stopped: 'Kraken Mount est arrêté. Ouvrez la vignette Kraken Mount pour le relancer.',
     prevFilter: 'Filtre précédent (L2)', nextFilter: 'Filtre suivant (R2)', sourceType: 'Type de source',
-    kindAll: 'Tous', kindFolders: 'Dossiers', badgeFolder: 'Dossier',
+    kindAll: 'Tous', kindFolders: 'Dossiers', badgeFolder: 'Dossier', badgeInstalled: 'Installé',
     driveInternal: 'Interne', driveUsb: 'USB {n}', driveExt: 'Étendu {n}',
     driveFree: '{free} libres sur {total}',
     eject: 'Démonter', ejecting: 'Démontage...', ejectAria: 'Démonter {drive}', ejectTitle: 'Démonter {drive} ?',
@@ -992,6 +998,7 @@ var MSG = {
     rescan: 'Réanalyser', rebuildAll: 'Tout recréer',
     scanPaths: "Chemins d'analyse",
     scanPathsHint: 'Un par ligne. Vide = racines par défaut (/data/homebrew, /data/etaHEN/games et, sur chaque disque, homebrew, etaHEN/games et la racine).',
+    autoImportInstalled: 'Lister les jeux installés sur la console (/user/app), sans les déplacer',
     addEmulators: "Ajouter les émulateurs DLC (dlc_emu) et PlayGo (pgo_stub) fournis quand un jeu en a besoin et n'en a pas",
     injectAmpr: 'Injecter ampr-emu-ng dans la fakelib des jeux en dossier (les jeux pkg l\'ont toujours)',
     amprAutoUpdate: 'Mettre à jour ampr-emu-ng automatiquement (vérifié une fois au démarrage)',
@@ -1035,7 +1042,7 @@ var MSG = {
     waitKstuff: 'kstuff を待っています: まだ起動していません。起動するとゲームが表示されます。', waitSmp: 'ShadowMount+ が実行中です: Kraken Mount を使うには停止してください。停止するとゲームが表示されます。',
     stopped: 'Kraken Mount は停止しました。再び起動するには Kraken Mount タイルを開いてください。',
     prevFilter: '前のフィルター (L2)', nextFilter: '次のフィルター (R2)', sourceType: 'ソースの種類',
-    kindAll: 'すべて', kindFolders: 'フォルダー', badgeFolder: 'フォルダー',
+    kindAll: 'すべて', kindFolders: 'フォルダー', badgeFolder: 'フォルダー', badgeInstalled: 'インストール済み',
     driveInternal: '内蔵', driveUsb: 'USB {n}', driveExt: '拡張 {n}',
     driveFree: '空き {free} / {total}',
     eject: 'マウント解除', ejecting: '解除中...', ejectAria: '{drive} のマウントを解除', ejectTitle: '{drive} のマウントを解除しますか？',
@@ -1075,6 +1082,7 @@ var MSG = {
     rescan: '再スキャン', rebuildAll: 'すべて再作成',
     scanPaths: 'スキャンするパス',
     scanPathsHint: '1 行に 1 つ。空欄 = 既定のルート（/data/homebrew、/data/etaHEN/games、各ドライブの homebrew、etaHEN/games とルート）。',
+    autoImportInstalled: '本体にインストール済みのゲーム（/user/app）を元の場所のまま一覧表示',
     addEmulators: 'ゲームが必要とし、自前で持っていない場合に同梱の DLC (dlc_emu) と PlayGo (pgo_stub) エミュレーターを追加',
     injectAmpr: 'フォルダ形式のゲームの fakelib に ampr-emu-ng を組み込む（pkg ゲームには常に組み込み）',
     amprAutoUpdate: 'ampr-emu-ng を自動更新（起動時に一度確認）',
@@ -1118,7 +1126,7 @@ var MSG = {
     waitKstuff: 'Aguardando o kstuff: ele ainda não está em execução. Os jogos aparecem quando ele iniciar.', waitSmp: 'O ShadowMount+ está em execução: pare-o para usar o Kraken Mount. Os jogos aparecem quando ele parar.',
     stopped: 'O Kraken Mount foi parado. Abra o bloco do Kraken Mount para iniciá-lo de novo.',
     prevFilter: 'Filtro anterior (L2)', nextFilter: 'Próximo filtro (R2)', sourceType: 'Tipo de origem',
-    kindAll: 'Todos', kindFolders: 'Pastas', badgeFolder: 'Pasta',
+    kindAll: 'Todos', kindFolders: 'Pastas', badgeFolder: 'Pasta', badgeInstalled: 'Instalado',
     driveInternal: 'Interno', driveUsb: 'USB {n}', driveExt: 'Estendido {n}',
     driveFree: 'livre: {free} de {total}',
     eject: 'Desmontar', ejecting: 'Desmontando...', ejectAria: 'Desmontar {drive}', ejectTitle: 'Desmontar {drive}?',
@@ -1158,6 +1166,7 @@ var MSG = {
     rescan: 'Escanear de novo', rebuildAll: 'Recriar tudo',
     scanPaths: 'Caminhos de varredura',
     scanPathsHint: 'Um por linha. Vazio = raízes padrão (/data/homebrew, /data/etaHEN/games e, em cada drive, homebrew, etaHEN/games e a raiz).',
+    autoImportInstalled: 'Listar os jogos instalados no console (/user/app), sem movê-los',
     addEmulators: 'Adicionar os emuladores incluídos de DLC (dlc_emu) e PlayGo (pgo_stub) quando um jogo precisa e não os tem',
     injectAmpr: 'Injetar ampr-emu-ng na fakelib dos jogos em pasta (jogos pkg sempre o recebem)',
     amprAutoUpdate: 'Atualizar o ampr-emu-ng automaticamente (verificado uma vez ao iniciar)',
@@ -1201,7 +1210,7 @@ var MSG = {
     waitKstuff: 'In attesa di kstuff: non è ancora in esecuzione. I giochi compariranno quando si avvia.', waitSmp: 'ShadowMount+ è in esecuzione: arrestalo per usare Kraken Mount. I giochi compariranno quando si arresta.',
     stopped: 'Kraken Mount è stato arrestato. Apri il riquadro Kraken Mount per avviarlo di nuovo.',
     prevFilter: 'Filtro precedente (L2)', nextFilter: 'Filtro successivo (R2)', sourceType: 'Tipo di sorgente',
-    kindAll: 'Tutti', kindFolders: 'Cartelle', badgeFolder: 'Cartella',
+    kindAll: 'Tutti', kindFolders: 'Cartelle', badgeFolder: 'Cartella', badgeInstalled: 'Installato',
     driveInternal: 'Interno', driveUsb: 'USB {n}', driveExt: 'Esteso {n}',
     driveFree: 'liberi {free} su {total}',
     eject: 'Smonta', ejecting: 'Smontaggio...', ejectAria: 'Smonta {drive}', ejectTitle: 'Smontare {drive}?',
@@ -1241,6 +1250,7 @@ var MSG = {
     rescan: 'Ripeti scansione', rebuildAll: 'Ricrea tutto',
     scanPaths: 'Percorsi di scansione',
     scanPathsHint: "Uno per riga. Vuoto = radici predefinite (/data/homebrew, /data/etaHEN/games e, su ogni unità, homebrew, etaHEN/games e la radice).",
+    autoImportInstalled: 'Elenca i giochi installati sulla console (/user/app), senza spostarli',
     addEmulators: 'Aggiungi gli emulatori inclusi di DLC (dlc_emu) e PlayGo (pgo_stub) quando un gioco ne ha bisogno e non li ha',
     injectAmpr: 'Inserisci ampr-emu-ng nella fakelib dei giochi in cartella (i giochi pkg lo ricevono sempre)',
     amprAutoUpdate: "Aggiorna automaticamente ampr-emu-ng (controllato una volta all'avvio)",
@@ -1284,7 +1294,7 @@ var MSG = {
     waitKstuff: 'kstuff를 기다리는 중: 아직 실행되지 않았습니다. 실행되면 게임이 표시됩니다.', waitSmp: 'ShadowMount+가 실행 중입니다: Kraken Mount를 사용하려면 중지하세요. 중지되면 게임이 표시됩니다.',
     stopped: 'Kraken Mount가 중지되었습니다. 다시 시작하려면 Kraken Mount 타일을 여세요.',
     prevFilter: '이전 필터 (L2)', nextFilter: '다음 필터 (R2)', sourceType: '소스 유형',
-    kindAll: '전체', kindFolders: '폴더', badgeFolder: '폴더',
+    kindAll: '전체', kindFolders: '폴더', badgeFolder: '폴더', badgeInstalled: '설치됨',
     driveInternal: '내장', driveUsb: 'USB {n}', driveExt: '확장 {n}',
     driveFree: '{total} 중 {free} 사용 가능',
     eject: '마운트 해제', ejecting: '해제 중...', ejectAria: '{drive} 마운트 해제', ejectTitle: '{drive} 마운트를 해제할까요?',
@@ -1324,6 +1334,7 @@ var MSG = {
     rescan: '다시 스캔', rebuildAll: '모두 다시 생성',
     scanPaths: '스캔 경로',
     scanPathsHint: '한 줄에 하나씩. 비워 두면 기본 루트(/data/homebrew, /data/etaHEN/games, 각 드라이브의 homebrew, etaHEN/games 및 루트).',
+    autoImportInstalled: '본체에 설치된 게임(/user/app)을 원래 위치에서 표시',
     addEmulators: '게임에 필요하지만 없을 때 내장 DLC (dlc_emu) 및 PlayGo (pgo_stub) 에뮬레이터 추가',
     injectAmpr: '폴더 게임의 fakelib에 ampr-emu-ng 삽입 (pkg 게임은 항상 삽입)',
     amprAutoUpdate: 'ampr-emu-ng 자동 업데이트 (시작 시 한 번 확인)',
@@ -1367,7 +1378,7 @@ var MSG = {
     waitKstuff: 'في انتظار kstuff: لم يبدأ تشغيله بعد. ستظهر الألعاب عند تشغيله.', waitSmp: 'ShadowMount+ قيد التشغيل: أوقفه لاستخدام Kraken Mount. ستظهر الألعاب عند إيقافه.',
     stopped: 'توقّف Kraken Mount. افتح لوحة Kraken Mount لتشغيله مرة أخرى.',
     prevFilter: 'الفلتر السابق (L2)', nextFilter: 'الفلتر التالي (R2)', sourceType: 'نوع المصدر',
-    kindAll: 'الكل', kindFolders: 'المجلدات', badgeFolder: 'مجلد',
+    kindAll: 'الكل', kindFolders: 'المجلدات', badgeFolder: 'مجلد', badgeInstalled: 'مثبّتة',
     driveInternal: 'داخلي', driveUsb: 'USB {n}', driveExt: 'موسّع {n}',
     driveFree: 'متاح {free} من {total}',
     eject: 'إلغاء التركيب', ejecting: 'جارٍ إلغاء التركيب...', ejectAria: 'إلغاء تركيب {drive}', ejectTitle: 'إلغاء تركيب {drive}؟',
@@ -1407,6 +1418,7 @@ var MSG = {
     rescan: 'إعادة المسح', rebuildAll: 'إعادة إنشاء الكل',
     scanPaths: 'مسارات المسح',
     scanPathsHint: 'مسار واحد في كل سطر. فارغ = الجذور الافتراضية (/data/homebrew و/data/etaHEN/games، وعلى كل محرك homebrew وetaHEN/games والجذر).',
+    autoImportInstalled: 'عرض الألعاب المثبّتة على الجهاز (/user/app) في مكانها',
     addEmulators: 'إضافة محاكيات DLC (dlc_emu) وPlayGo (pgo_stub) المضمّنة عندما تحتاجها اللعبة ولا تتضمنها',
     injectAmpr: 'حقن ampr-emu-ng في fakelib لألعاب المجلدات (ألعاب pkg تحصل عليه دائمًا)',
     amprAutoUpdate: 'تحديث ampr-emu-ng تلقائيًا (يُفحص مرة واحدة عند البدء)',
@@ -1612,7 +1624,10 @@ function gameKind(g) {
   if (g.packing === 'lz4' || g.packing === 'zstd') return g.packing;
   return 'folder';
 }
-function badgeText(g) { return { pkg: 'PKG', folder: t('badgeFolder'), lz4: 'LZ4', zstd: 'ZSTD' }[gameKind(g)]; }
+function badgeText(g) {
+  if (g.installed_pkg) return t('badgeInstalled');
+  return { pkg: 'PKG', folder: t('badgeFolder'), lz4: 'LZ4', zstd: 'ZSTD' }[gameKind(g)];
+}
 function gameName(g) { return g.title_name || g.title_id; }
 function gameSub(g) { return g.title_id + (g.version ? ' · ' + g.version : ''); }
 function isRunning(g) { return state && Array.isArray(state.running) && state.running.indexOf(g.title_id) >= 0; }
@@ -1910,6 +1925,8 @@ function renderModal() {
   setText($('m-err'), modalActionError || g.error || '');
   // A duplicate shares the title id of the library copy: the API calls would act on that copy.
   $('m-rebuild').disabled = g.status === 'duplicate' || g.status === 'building';
+  // An installed package belongs to the system: the API refuses to delete it, so do not offer it.
+  $('m-delete').hidden = !!g.installed_pkg;
   $('m-delete').disabled = g.status === 'duplicate';
 }
 function renderSizes(sizes) {
@@ -1973,7 +1990,7 @@ $('m-rebuild').onclick = function () {
 };
 $('m-delete').onclick = function () {
   var g = openTid && findGame(openTid);
-  if (!g) return;
+  if (!g || g.installed_pkg) return;
   var tid = g.title_id;
   ask(t('deleteTitle', { name: gameName(g) }), t(g.kind === 'pkg' ? 'deletePkg' : 'deleteFolder', { path: g.path }),
     t('delete'), async function () {
@@ -2072,7 +2089,7 @@ async function poll() {
 }
 
 // ---- chunk 3: settings, log, views, keys ----
-var BOOLS = ['inject_ampr', 'add_emulators', 'ampr_auto_update', 'backports', 'auto_remove_missing', 'notify', 'log', 'debug'];
+var BOOLS = ['auto_import_installed', 'inject_ampr', 'add_emulators', 'ampr_auto_update', 'backports', 'auto_remove_missing', 'notify', 'log', 'debug'];
 var NUMS = ['scan_interval_seconds', 'stability_wait_seconds', 'auto_remove_delay_seconds', 'low_space_gb'];
 var settingsRequest = 0;
 function fillSettings(v) {

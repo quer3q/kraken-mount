@@ -190,7 +190,7 @@ fn claim<T>(seen: &mut HashMap<String, (bool, Option<usize>)>, games: &mut Vec<O
 /// Last logged scan error per path.
 static LOGGED: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 
-pub fn scan(roots: &[String], backports: bool, stability_wait: u64) -> ScanResult {
+pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_installed: bool) -> ScanResult {
     let mut result = ScanResult { games: Vec::new(), duplicates: Vec::new(), errors: Vec::new(), unstable: Vec::new() };
     // Title id -> (winner is a pkg, its index in `games`; None while the winner is still being copied).
     let mut seen: HashMap<String, (bool, Option<usize>)> = HashMap::new();
@@ -297,6 +297,19 @@ pub fn scan(roots: &[String], backports: bool, stability_wait: u64) -> ScanResul
             claim(&mut seen, &mut games, &mut result.duplicates, &tid, pkg, Some(source));
         }
     }
+    // Packages the system installed stay where they are and join the library like any other pkg
+    // source; the scan roots' copies keep the usual duplicate rule.
+    if import_installed {
+        for (path, tid) in crate::installed::paths() {
+            match installed_source(&path, &tid) {
+                Ok(source) => {
+                    let tid = source.title_id.clone();
+                    claim(&mut seen, &mut games, &mut result.duplicates, &tid, true, Some(source));
+                }
+                Err(e) => scan_error(&mut result, path, e),
+            }
+        }
+    }
     result.games = games.into_iter().flatten().collect();
     result.games.sort_by(|a, b| a.title_name.cmp(&b.title_name));
     // A fixed error that comes back is logged again.
@@ -340,6 +353,28 @@ fn local_title<'a>(lp: &'a serde_json::Value, want: &str) -> Option<&'a str> {
     let titles = || langs.iter().filter(|(k, _)| *k != "defaultLanguage");
     titles().find(|(k, _)| k.eq_ignore_ascii_case(want)).and_then(|(_, v)| name(v))
         .or_else(|| titles().filter(|(k, _)| base(k) == base(want)).find_map(|(_, v)| name(v)))
+}
+
+/// The Source of one installed package (`/user/app/<TID>/app.pkg` and the extended-storage
+/// roots), read with the same memoized parser as a scanned pkg. The path and its metadata title
+/// id must both match the title directory; read access is added first, never anything else.
+pub fn installed_source(path: &Path, expected: &str) -> io::Result<Source> {
+    if !crate::installed::package_path(path)
+        || path.parent().and_then(Path::file_name).is_none_or(|n| n != expected)
+    {
+        return Err(Error::new(ErrorKind::InvalidInput, "installed package path/title mismatch"));
+    }
+    let metadata = fs::metadata(path)?;
+    crate::installed::prepare(path, expected, metadata.len())?;
+    let (title_id, title_name, version) = pkg_param(path, metadata.len(), metadata.modified()?)
+        .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+    if title_id != expected {
+        return Err(Error::new(ErrorKind::InvalidData, "installed package metadata title mismatch"));
+    }
+    Ok(Source {
+        path: path.to_owned(), kind: Kind::Pkg, title_id, title_name, version,
+        size: metadata.len(), drive: crate::storage::drive_of(path), backport: None,
+    })
 }
 
 /// Game title ids only: NPXS ids are system apps (SMP is_supported_game_title_id).

@@ -27,6 +27,7 @@ sandbox. Web UI on port 8097 (opened from the "Kraken Mount" home-screen tile).
 | `src/config.rs` | `/data/krakenmount/config.toml` settings |
 | `src/storage.rs` | drives and default scan roots |
 | `src/scan.rs` | game discovery, backports, duplicates |
+| `src/installed.rs` | packages installed by the system (`/user/app/<TID>/app.pkg`), kept in place |
 | `src/cache.rs` | per-game cache `/data/krakenmount/caches/<TID>`, freshness, `.built`, purge |
 | `src/ampr_index.rs` | writes `ampr_emu.index` + `ampr_assets.index` for pkg caches |
 | `src/register.rs` | home-screen registration, `/system_ex/app/<TID>` mounts, the tile |
