@@ -200,6 +200,8 @@ fn publish(state: &State, r: &scan::ScanResult) {
             }
         }
     }
+    // Installed retail packages are not games: the UI shows how many were left alone.
+    *state.skipped.lock().unwrap() = r.skipped.iter().map(|(_, tid)| tid.clone()).collect();
 }
 /// Debug: copies the kernel log (/dev/klog: module load failures, process crashes) to
 /// /data/krakenmount/klog.txt, read through the web UI's /file route.

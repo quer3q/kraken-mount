@@ -57,6 +57,9 @@ original path: nothing is copied, moved or deleted, and `/api/delete` refuses th
 is read, a restricted install gets the missing read bits (pkg +0444, its directory +0555; bits are
 only added, as `fix_access`); the title id and size are rechecked, and a symlink or another file
 name is refused. A copy found in a scan root keeps the usual duplicate rule and wins over them.
+A package that is not a homebrew one (a retail or signed install: no `\x7FFIH` header or a signed
+byte) is left alone and reported as skipped (`ScanResult::skipped`, logged once; the UI's settings
+info shows the count) instead of as a scan error. A header that cannot be read is an error.
 
 ## Settings (`src/config.rs`, file `/data/krakenmount/config.toml`)
 A flat TOML subset: `key = value` with strings, `true`/`false`, integers and arrays of strings; `#` comments.
@@ -299,7 +302,8 @@ pub struct Source { pub path: std::path::PathBuf, pub kind: Kind, pub title_id: 
   pub version: String, /* param.json contentVersion, or empty */
   pub drive: String, pub size: u64 /* pkg file size; folder: 0 */, pub backport: Option<std::path::PathBuf> }
 pub struct ScanResult { pub games: Vec<Source>, pub duplicates: Vec<Source>, pub errors: Vec<(std::path::PathBuf, String)>,
-  pub unstable: Vec<(std::path::PathBuf, Option<String> /* title id when known */)> } // still being copied: skipped, not gone
+  pub unstable: Vec<(std::path::PathBuf, Option<String> /* title id when known */)>, // still being copied: skipped, not gone
+  pub skipped: Vec<(std::path::PathBuf, String /* title id */)> } // installed, not a homebrew pkg: a status, not an error
 pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_installed: bool) -> ScanResult;  // memoizes pkg param reads by (path, size, mtime)
 pub fn installed_source(path: &std::path::Path, expected: &str) -> std::io::Result<Source>; // a system-installed pkg, in place
 pub fn still_written(paths: &[std::path::PathBuf], wait: u64) -> Option<u64>; // age in s of the youngest max(mtime, ctime) under wait; None = stable
@@ -309,6 +313,7 @@ pub fn valid_tid(t: &str) -> bool;
 // installed.rs (packages the system installed, kept in place)
 pub fn package_path(path: &std::path::Path) -> bool;        // <app root>/<TID>/app.pkg, valid title id
 pub fn paths() -> Vec<(std::path::PathBuf, String)>;         // every installed package, in title-id order
+pub fn homebrew(path: &std::path::Path) -> std::io::Result<bool>; // a `\x7FFIH` header, unsigned; false = retail/signed
 pub fn prepare(path: &std::path::Path, tid: &str, size: u64) -> std::io::Result<()>; // adds missing read bits only
 
 // cache.rs
@@ -363,7 +368,9 @@ pub fn https_get(url: &str, max: usize) -> std::io::Result<Vec<u8>>;
 - `GET /api/state`:
   `{version, busy, paused, waiting:"kstuff"|"shadowmount"|null, running:[TID], games:[{title_id, title_name, version, path, kind:"pkg"|"folder", packing:"plain"|"zstd"|"lz4"|null,
   drive, size, installed_pkg: bool, status:"pending"|"checking"|"building"|"ready"|"error"|"duplicate", error, cache_size, cache_built, backport}],
+  installed_skipped:[TID],
   drives:[{mount, label, kind, total, free, ejectable}], cache:{path, size, free, low_space, ampr_present}, log:[last 100 lines of the last 64 KiB]}`
+  (`installed_skipped`: installed packages left alone because they are not homebrew PKGs.)
 - `GET /api/settings` -> settings JSON; `POST /api/settings` (JSON body) -> save, apply, rescan.
 - `GET /api/ampr` -> `{kind: "bundled"|"downloaded"|"hand"|"missing"|"error", version, updating}` of
   `ampr/libSceAmpr.sprx`; `POST /api/ampr/update` -> forced update, answered when done: 200 + result text,

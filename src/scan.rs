@@ -40,6 +40,9 @@ pub struct ScanResult {
     /// Sources still being copied (stability_wait_seconds): path and title id when known.
     /// Skipped this pass, but not gone: the caller keeps their entry, registration and cache.
     pub unstable: Vec<(PathBuf, Option<String>)>,
+    /// Installed packages the system owns but Kraken Mount cannot read (retail or signed):
+    /// shown as a status, not as errors.
+    pub skipped: Vec<(PathBuf, String)>,
 }
 
 /// Seconds since the youngest max(mtime, ctime) of `paths` when that is under `wait` (SMP
@@ -70,6 +73,18 @@ fn skip_unstable(result: &mut ScanResult, path: PathBuf, tid: Option<String>, ag
 
 /// Unstable sources already logged.
 static UNSTABLE: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+
+/// Records an installed package that is not a homebrew pkg; logs it once until it becomes one.
+fn skip_installed(result: &mut ScanResult, path: PathBuf, tid: String) {
+    let logged = SKIPPED.get_or_init(|| Mutex::new(HashSet::new()));
+    if logged.lock().unwrap_or_else(|e| e.into_inner()).insert(path.clone()) {
+        log!("{tid}: installed package is not a homebrew PKG (retail or signed), skipped");
+    }
+    result.skipped.push((path, tid));
+}
+
+/// Skipped installed packages already logged.
+static SKIPPED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
 
 type PkgParam = Result<(String, String, String), String>;
 type PkgMemo = HashMap<PathBuf, (u64, SystemTime, PkgParam)>;
@@ -191,7 +206,9 @@ fn claim<T>(seen: &mut HashMap<String, (bool, Option<usize>)>, games: &mut Vec<O
 static LOGGED: OnceLock<Mutex<HashMap<PathBuf, String>>> = OnceLock::new();
 
 pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_installed: bool) -> ScanResult {
-    let mut result = ScanResult { games: Vec::new(), duplicates: Vec::new(), errors: Vec::new(), unstable: Vec::new() };
+    let mut result = ScanResult {
+        games: Vec::new(), duplicates: Vec::new(), errors: Vec::new(), unstable: Vec::new(), skipped: Vec::new(),
+    };
     // Title id -> (winner is a pkg, its index in `games`; None while the winner is still being copied).
     let mut seen: HashMap<String, (bool, Option<usize>)> = HashMap::new();
     // A slot is emptied when a later source beats it.
@@ -306,7 +323,12 @@ pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_insta
                     let tid = source.title_id.clone();
                     claim(&mut seen, &mut games, &mut result.duplicates, &tid, true, Some(source));
                 }
-                Err(e) => scan_error(&mut result, path, e),
+                // A retail or signed package belongs to the system and is not something to
+                // read: a status, not a scan error. An unreadable header is still an error.
+                Err(e) => match crate::installed::homebrew(&path) {
+                    Ok(false) => skip_installed(&mut result, path, tid),
+                    _ => scan_error(&mut result, path, e),
+                },
             }
         }
     }
@@ -321,6 +343,11 @@ pub fn scan(roots: &[String], backports: bool, stability_wait: u64, import_insta
     if let Some(logged) = UNSTABLE.get() {
         let unstable: HashSet<&PathBuf> = result.unstable.iter().map(|(p, _)| p).collect();
         logged.lock().unwrap_or_else(|e| e.into_inner()).retain(|p| unstable.contains(p));
+    }
+    // An installed package that became readable is logged again if it lapses.
+    if let Some(logged) = SKIPPED.get() {
+        let skipped: HashSet<&PathBuf> = result.skipped.iter().map(|(p, _)| p).collect();
+        logged.lock().unwrap_or_else(|e| e.into_inner()).retain(|p| skipped.contains(p));
     }
     result
 }

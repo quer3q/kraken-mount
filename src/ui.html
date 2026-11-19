@@ -459,6 +459,7 @@ button:disabled { opacity: 0.5; cursor: default; }
       <div>
         <p id="scache"></p>
         <p id="sdrives"></p>
+        <p id="sskipped"></p>
         <div class="msg" id="smsg"></div>
       </div>
       <div class="btns">
@@ -603,6 +604,7 @@ var MSG = {
     language: 'Language', system: 'System',
     purgeCache: 'Purge cache', save: 'Save',
     cacheInfo: 'Cache: {size} in {path}, {free} free on the internal SSD.',
+    installedSkipped: '{count} installed package(s) are not homebrew PKGs (retail or signed) and are skipped.',
     driveInfo: '{drive}: {free} free of {total}',
     loading: 'Loading...', saving: 'Saving...', saved: 'Saved.',
     loadFailed: 'Could not load settings: {error}. Close and reopen to retry; Save is off.',
@@ -687,6 +689,7 @@ var MSG = {
     language: 'Язык', system: 'Как в системе',
     purgeCache: 'Очистить кеш', save: 'Сохранить',
     cacheInfo: 'Кеш: {size} в {path}, свободно {free} на внутреннем SSD.',
+    installedSkipped: '{count} установленных пакетов не являются homebrew-PKG (retail или подписанные) и пропущены.',
     driveInfo: '{drive}: свободно {free} из {total}',
     loading: 'Загрузка...', saving: 'Сохранение...', saved: 'Сохранено.',
     loadFailed: 'Не удалось загрузить настройки: {error}. Закройте и откройте снова; сохранение отключено.',
@@ -771,6 +774,7 @@ var MSG = {
     language: '语言', system: '跟随系统',
     purgeCache: '清除缓存', save: '保存',
     cacheInfo: '缓存：{size}，位于 {path}，内部 SSD 可用 {free}。',
+    installedSkipped: '{count} 个已安装的包不是自制 PKG（零售或已签名），已跳过。',
     driveInfo: '{drive}：可用 {free}，共 {total}',
     loading: '正在加载...', saving: '正在保存...', saved: '已保存。',
     loadFailed: '无法加载设置：{error}。请关闭后重新打开以重试；保存已停用。',
@@ -855,6 +859,7 @@ var MSG = {
     language: 'Sprache', system: 'System',
     purgeCache: 'Cache bereinigen', save: 'Speichern',
     cacheInfo: 'Cache: {size} in {path}, {free} frei auf der internen SSD.',
+    installedSkipped: '{count} installierte Pakete sind keine Homebrew-PKGs (Retail oder signiert) und werden übersprungen.',
     driveInfo: '{drive}: {free} von {total} frei',
     loading: 'Wird geladen...', saving: 'Wird gespeichert...', saved: 'Gespeichert.',
     loadFailed: 'Einstellungen konnten nicht geladen werden: {error}. Schließen und erneut öffnen; Speichern ist aus.',
@@ -939,6 +944,7 @@ var MSG = {
     language: 'Idioma', system: 'Sistema',
     purgeCache: 'Purgar caché', save: 'Guardar',
     cacheInfo: 'Caché: {size} en {path}, {free} libres en el SSD interno.',
+    installedSkipped: '{count} paquetes instalados no son PKG caseros (retail o firmados) y se omiten.',
     driveInfo: '{drive}: libre {free} de {total}',
     loading: 'Cargando...', saving: 'Guardando...', saved: 'Guardado.',
     loadFailed: 'No se pudieron cargar los ajustes: {error}. Cierra y vuelve a abrir para reintentar; Guardar está desactivado.',
@@ -1023,6 +1029,7 @@ var MSG = {
     language: 'Langue', system: 'Système',
     purgeCache: 'Purger le cache', save: 'Enregistrer',
     cacheInfo: 'Cache : {size} dans {path}, {free} libres sur le SSD interne.',
+    installedSkipped: "{count} paquets installés ne sont pas des PKG homebrew (retail ou signés) et sont ignorés.",
     driveInfo: '{drive} : {free} libres sur {total}',
     loading: 'Chargement...', saving: 'Enregistrement...', saved: 'Enregistré.',
     loadFailed: "Impossible de charger les paramètres : {error}. Fermez et rouvrez pour réessayer ; l'enregistrement est désactivé.",
@@ -1107,6 +1114,7 @@ var MSG = {
     language: '言語', system: 'システム',
     purgeCache: 'キャッシュを消去', save: '保存',
     cacheInfo: 'キャッシュ: {path} に {size}、内蔵 SSD の空き {free}。',
+    installedSkipped: '{count} 個のインストール済みパッケージは自作 PKG（リテールまたは署名済み）ではないためスキップされます。',
     driveInfo: '{drive}: 空き {free} / {total}',
     loading: '読み込み中...', saving: '保存中...', saved: '保存しました。',
     loadFailed: '設定を読み込めませんでした: {error}。閉じて開き直すと再試行します。保存は無効です。',
@@ -1191,6 +1199,7 @@ var MSG = {
     language: 'Idioma', system: 'Sistema',
     purgeCache: 'Limpar cache', save: 'Salvar',
     cacheInfo: 'Cache: {size} em {path}, {free} livres no SSD interno.',
+    installedSkipped: '{count} pacotes instalados não são PKG caseiros (retail ou assinados) e são ignorados.',
     driveInfo: '{drive}: livre {free} de {total}',
     loading: 'Carregando...', saving: 'Salvando...', saved: 'Salvo.',
     loadFailed: 'Não foi possível carregar as configurações: {error}. Feche e abra de novo para tentar outra vez; Salvar está desativado.',
@@ -1275,6 +1284,7 @@ var MSG = {
     language: 'Lingua', system: 'Sistema',
     purgeCache: 'Pulisci cache', save: 'Salva',
     cacheInfo: "Cache: {size} in {path}, {free} liberi sull'SSD interno.",
+    installedSkipped: '{count} pacchetti installati non sono PKG homebrew (retail o firmati) e vengono saltati.',
     driveInfo: '{drive}: liberi {free} su {total}',
     loading: 'Caricamento...', saving: 'Salvataggio...', saved: 'Salvato.',
     loadFailed: 'Impossibile caricare le impostazioni: {error}. Chiudi e riapri per riprovare; Salva è disattivato.',
@@ -1359,6 +1369,7 @@ var MSG = {
     language: '언어', system: '시스템',
     purgeCache: '캐시 정리', save: '저장',
     cacheInfo: '캐시: {path}에 {size}, 내장 SSD 여유 공간 {free}.',
+    installedSkipped: '설치된 패키지 {count}개가 홈브루 PKG(리테일 또는 서명됨)가 아니어서 건너뜁니다.',
     driveInfo: '{drive}: {total} 중 {free} 사용 가능',
     loading: '불러오는 중...', saving: '저장하는 중...', saved: '저장되었습니다.',
     loadFailed: '설정을 불러올 수 없습니다: {error}. 닫았다가 다시 열어 재시도하세요. 저장은 꺼져 있습니다.',
@@ -1443,6 +1454,7 @@ var MSG = {
     language: 'اللغة', system: 'لغة النظام',
     purgeCache: 'تنظيف الذاكرة المؤقتة', save: 'حفظ',
     cacheInfo: 'الذاكرة المؤقتة: {size} في {path}، والمتاح {free} على SSD الداخلي.',
+    installedSkipped: 'تم تخطّي {count} من الحزم المثبّتة لأنها ليست حزم homebrew (تجزئة أو موقّعة).',
     driveInfo: '{drive}: متاح {free} من {total}',
     loading: 'جارٍ التحميل...', saving: 'جارٍ الحفظ...', saved: 'تم الحفظ.',
     loadFailed: 'تعذّر تحميل الإعدادات: {error}. أغلق وافتح من جديد لإعادة المحاولة؛ الحفظ معطّل.',
@@ -2112,6 +2124,8 @@ function renderSettingsInfo() {
   setText($('sdrives'), drives.map(function (d) {
     return t('driveInfo', { drive: driveLabel(d.mount), free: gb(d.free), total: gb(d.total) });
   }).join(' · '));
+  var skipped = (state && Array.isArray(state.installed_skipped)) ? state.installed_skipped : [];
+  setText($('sskipped'), skipped.length ? t('installedSkipped', { count: skipped.length }) : '');
 }
 var amprInfo = null, amprBusy = false;
 var AMPR_KINDS = { bundled: 'amprBundled', downloaded: 'amprDownloaded', hand: 'amprHand', missing: 'amprMissing' };

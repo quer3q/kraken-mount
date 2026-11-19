@@ -32,6 +32,17 @@ pub fn package_path(path: &Path) -> bool {
     })
 }
 
+/// True when `app.pkg` starts like a package Kraken Mount can read: the dump-forge `\x7FFIH`
+/// header with the debug signed byte 0. A retail install (`\x7FCNT`, or a signed FIH) is a
+/// package of the system, never a scan error: the scan lists it as skipped. A header that
+/// cannot be read is an error (the caller reports it).
+pub fn homebrew(path: &Path) -> io::Result<bool> {
+    use std::io::Read;
+    let mut head = [0u8; 6];
+    fs::File::open(path)?.read_exact(&mut head)?;
+    Ok(&head[..4] == b"\x7fFIH" && head[5] == 0)
+}
+
 /// Every installed package, in title-id order: (path, title id). A regular `app.pkg` only:
 /// a symlink, a missing entry or another file name is left to the system.
 pub fn paths() -> Vec<(PathBuf, String)> {

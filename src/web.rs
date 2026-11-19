@@ -43,6 +43,8 @@ pub struct State {
     pub work: Mutex<()>,
     pub low_space: AtomicBool,
     pub cache_total: Mutex<u64>,
+    /// Installed packages that are not homebrew PKGs (retail or signed): title ids, for the UI.
+    pub skipped: Mutex<Vec<String>>,
     /// Title ids registered by this run or with a built cache; launch::watch overlays only these.
     pub titles: Arc<Mutex<HashSet<String>>>,
     /// Title ids with a live game session (launch::watch); the scan loop pauses while non-empty.
@@ -63,6 +65,7 @@ impl State {
             work: Mutex::new(()),
             low_space: AtomicBool::new(false),
             cache_total: Mutex::new(0),
+            skipped: Mutex::new(Vec::new()),
             titles: Arc::new(Mutex::new(HashSet::new())),
             running: Arc::new(Mutex::new(HashSet::new())),
             rescan: Mutex::new(false),
@@ -416,6 +419,7 @@ fn api_state(state: &State) -> Vec<u8> {
         "waiting": *state.waiting.lock().unwrap(),
         "running": running,
         "games": games,
+        "installed_skipped": *state.skipped.lock().unwrap(),
         "drives": drives,
         "cache": {
             "path": cache::CACHES,
