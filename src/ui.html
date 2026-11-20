@@ -477,6 +477,7 @@ button:disabled { opacity: 0.5; cursor: default; }
       <div class="btns">
         <button class="danger" type="button" id="m-delete" data-i18n="delete">Delete</button>
         <button type="button" id="m-rebuild" data-i18n="rebuildCache">Rebuild cache</button>
+        <button type="button" id="m-report" data-i18n="report">Report</button>
       </div>
     </div>
     <div class="sheet-head">
@@ -555,6 +556,7 @@ var MSG = {
     delete: 'Delete', rebuildCache: 'Rebuild cache', close: 'Close', storage: 'Storage',
     fTitleId: 'Title ID', fVersion: 'Version', fStatus: 'Status', fType: 'Type', fDrive: 'Drive',
     fPath: 'Path', fCachePath: 'Cache path', fCacheSize: 'Cache size', fCacheBuilt: 'Cache built',
+    fCrash: 'Last crash', crashHint: 'The game crashed while running. That usually comes from the dump, ampr-emu-ng or the PlayGo stub, not the mount. Use Report when you open an issue.', report: 'Report',
     fBackport: 'Backport', yes: 'Yes', no: 'No', notBuilt: 'not built',
     playgoStub: 'PlayGo stub', playgoHint: 'Turn off if the game stays on a black screen; turn on if it asks to finish the download.',
     szGame: 'Game', szDlc: 'DLC', szSave: 'Save', szCache: 'Cache',
@@ -641,6 +643,7 @@ var MSG = {
     delete: 'Удалить', rebuildCache: 'Пересобрать кеш', close: 'Закрыть', storage: 'Хранилище',
     fTitleId: 'Title ID', fVersion: 'Версия', fStatus: 'Статус', fType: 'Тип', fDrive: 'Накопитель',
     fPath: 'Путь', fCachePath: 'Путь кеша', fCacheSize: 'Размер кеша', fCacheBuilt: 'Кеш собран',
+    fCrash: 'Последний сбой', crashHint: 'Игра упала во время работы. Обычно причина в дампе, ampr-emu-ng или заглушке PlayGo, а не в монтировании. Нажмите «Отчёт», когда создаёте issue.', report: 'Отчёт',
     fBackport: 'Бэкпорт', yes: 'Да', no: 'Нет', notBuilt: 'не собран',
     playgoStub: 'Заглушка PlayGo', playgoHint: 'Выключите, если игра остаётся на чёрном экране; включите, если она просит завершить загрузку.',
     szGame: 'Игра', szDlc: 'DLC', szSave: 'Сохранения', szCache: 'Кеш',
@@ -725,6 +728,7 @@ var MSG = {
     delete: '删除', rebuildCache: '重建缓存', close: '关闭', storage: '存储',
     fTitleId: 'Title ID', fVersion: '版本', fStatus: '状态', fType: '类型', fDrive: '驱动器',
     fPath: '路径', fCachePath: '缓存路径', fCacheSize: '缓存大小', fCacheBuilt: '缓存构建时间',
+    fCrash: '上次崩溃', crashHint: '游戏在运行时崩溃。原因通常是 dump、ampr-emu-ng 或 PlayGo 存根，而不是挂载。提交 issue 时请使用“报告”。', report: '报告',
     fBackport: '向下移植', yes: '是', no: '否', notBuilt: '未构建',
     playgoStub: 'PlayGo 存根', playgoHint: '如果游戏停留在黑屏，请关闭；如果游戏要求完成下载，请开启。',
     szGame: '游戏', szDlc: 'DLC', szSave: '存档', szCache: '缓存',
@@ -809,6 +813,7 @@ var MSG = {
     delete: 'Löschen', rebuildCache: 'Cache neu erstellen', close: 'Schließen', storage: 'Speicher',
     fTitleId: 'Title ID', fVersion: 'Version', fStatus: 'Status', fType: 'Typ', fDrive: 'Laufwerk',
     fPath: 'Pfad', fCachePath: 'Cache-Pfad', fCacheSize: 'Cache-Größe', fCacheBuilt: 'Cache erstellt',
+    fCrash: 'Letzter Absturz', crashHint: 'Das Spiel ist während des Spielens abgestürzt. Meist liegt es am Dump, an ampr-emu-ng oder am PlayGo-Stub, nicht am Einbinden. Nutze „Bericht“, wenn du ein Issue eröffnest.', report: 'Bericht',
     fBackport: 'Backport', yes: 'Ja', no: 'Nein', notBuilt: 'nicht erstellt',
     playgoStub: 'PlayGo-Stub', playgoHint: 'Ausschalten, wenn das Spiel auf einem schwarzen Bildschirm bleibt; einschalten, wenn es verlangt, den Download abzuschließen.',
     szGame: 'Spiel', szDlc: 'DLC', szSave: 'Spielstand', szCache: 'Cache',
@@ -893,6 +898,7 @@ var MSG = {
     delete: 'Eliminar', rebuildCache: 'Recrear caché', close: 'Cerrar', storage: 'Almacenamiento',
     fTitleId: 'Title ID', fVersion: 'Versión', fStatus: 'Estado', fType: 'Tipo', fDrive: 'Unidad',
     fPath: 'Ruta', fCachePath: 'Ruta de caché', fCacheSize: 'Tamaño de caché', fCacheBuilt: 'Caché creada',
+    fCrash: 'Último cierre inesperado', crashHint: 'El juego falló mientras se ejecutaba. Suele deberse al dump, a ampr-emu-ng o al stub de PlayGo, no al montaje. Usa Informe al abrir un issue.', report: 'Informe',
     fBackport: 'Backport', yes: 'Sí', no: 'No', notBuilt: 'sin crear',
     playgoStub: 'Stub de PlayGo', playgoHint: 'Desactívalo si el juego se queda en pantalla negra; actívalo si pide terminar la descarga.',
     szGame: 'Juego', szDlc: 'DLC', szSave: 'Partidas', szCache: 'Caché',
@@ -977,6 +983,7 @@ var MSG = {
     delete: 'Supprimer', rebuildCache: 'Recréer le cache', close: 'Fermer', storage: 'Stockage',
     fTitleId: 'Title ID', fVersion: 'Version', fStatus: 'État', fType: 'Type', fDrive: 'Disque',
     fPath: 'Chemin', fCachePath: 'Chemin du cache', fCacheSize: 'Taille du cache', fCacheBuilt: 'Cache créé',
+    fCrash: 'Dernier plantage', crashHint: 'Le jeu a planté pendant l\'exécution. La cause est souvent le dump, ampr-emu-ng ou le stub PlayGo, pas le montage. Utilisez Rapport pour ouvrir une issue.', report: 'Rapport',
     fBackport: 'Backport', yes: 'Oui', no: 'Non', notBuilt: 'non créé',
     playgoStub: 'Stub PlayGo', playgoHint: "Désactivez-le si le jeu reste sur un écran noir ; activez-le s'il demande de terminer le téléchargement.",
     szGame: 'Jeu', szDlc: 'DLC', szSave: 'Sauvegarde', szCache: 'Cache',
@@ -1061,6 +1068,7 @@ var MSG = {
     delete: '削除', rebuildCache: 'キャッシュを再作成', close: '閉じる', storage: 'ストレージ',
     fTitleId: 'Title ID', fVersion: 'バージョン', fStatus: '状態', fType: '種類', fDrive: 'ドライブ',
     fPath: 'パス', fCachePath: 'キャッシュのパス', fCacheSize: 'キャッシュのサイズ', fCacheBuilt: 'キャッシュ作成日時',
+    fCrash: '最後のクラッシュ', crashHint: 'ゲームが実行中にクラッシュしました。原因は多くの場合ダンプ、ampr-emu-ng、PlayGo スタブで、マウントではありません。issue を作るときは「レポート」を使ってください。', report: 'レポート',
     fBackport: 'バックポート', yes: 'はい', no: 'いいえ', notBuilt: '未作成',
     playgoStub: 'PlayGo スタブ', playgoHint: 'ゲームが黒い画面のままならオフに、ダウンロードの完了を求められたらオンにします。',
     szGame: 'ゲーム', szDlc: 'DLC', szSave: 'セーブ', szCache: 'キャッシュ',
@@ -1145,6 +1153,7 @@ var MSG = {
     delete: 'Excluir', rebuildCache: 'Recriar cache', close: 'Fechar', storage: 'Armazenamento',
     fTitleId: 'Title ID', fVersion: 'Versão', fStatus: 'Status', fType: 'Tipo', fDrive: 'Drive',
     fPath: 'Caminho', fCachePath: 'Caminho do cache', fCacheSize: 'Tamanho do cache', fCacheBuilt: 'Cache criado',
+    fCrash: 'Última falha', crashHint: 'O jogo falhou durante a execução. Geralmente a causa é o dump, o ampr-emu-ng ou o stub do PlayGo, não a montagem. Use Relatório ao abrir uma issue.', report: 'Relatório',
     fBackport: 'Backport', yes: 'Sim', no: 'Não', notBuilt: 'não criado',
     playgoStub: 'Stub do PlayGo', playgoHint: 'Desligue se o jogo ficar na tela preta; ligue se ele pedir para concluir o download.',
     szGame: 'Jogo', szDlc: 'DLC', szSave: 'Salvamento', szCache: 'Cache',
@@ -1229,6 +1238,7 @@ var MSG = {
     delete: 'Elimina', rebuildCache: 'Ricrea cache', close: 'Chiudi', storage: 'Archiviazione',
     fTitleId: 'Title ID', fVersion: 'Versione', fStatus: 'Stato', fType: 'Tipo', fDrive: 'Unità',
     fPath: 'Percorso', fCachePath: 'Percorso cache', fCacheSize: 'Dimensione cache', fCacheBuilt: 'Cache creata',
+    fCrash: 'Ultimo crash', crashHint: 'Il gioco è andato in crash durante l\'esecuzione. Di solito la causa è il dump, ampr-emu-ng o lo stub PlayGo, non il montaggio. Usa Report quando apri una issue.', report: 'Report',
     fBackport: 'Backport', yes: 'Sì', no: 'No', notBuilt: 'non creata',
     playgoStub: 'Stub PlayGo', playgoHint: 'Disattivalo se il gioco resta su schermo nero; attivalo se chiede di completare il download.',
     szGame: 'Gioco', szDlc: 'DLC', szSave: 'Salvataggi', szCache: 'Cache',
@@ -1313,6 +1323,7 @@ var MSG = {
     delete: '삭제', rebuildCache: '캐시 다시 생성', close: '닫기', storage: '저장소',
     fTitleId: 'Title ID', fVersion: '버전', fStatus: '상태', fType: '유형', fDrive: '드라이브',
     fPath: '경로', fCachePath: '캐시 경로', fCacheSize: '캐시 크기', fCacheBuilt: '캐시 생성 시각',
+    fCrash: '마지막 충돌', crashHint: '게임이 실행 중에 충돌했습니다. 원인은 보통 덤프, ampr-emu-ng 또는 PlayGo 스텁이며 마운트가 아닙니다. issue를 열 때 \'보고서\'를 사용하세요.', report: '보고서',
     fBackport: '백포트', yes: '예', no: '아니요', notBuilt: '생성 안 됨',
     playgoStub: 'PlayGo 스텁', playgoHint: '게임이 검은 화면에서 멈추면 끄고, 다운로드를 완료하라고 하면 켜세요.',
     szGame: '게임', szDlc: 'DLC', szSave: '세이브', szCache: '캐시',
@@ -1397,6 +1408,7 @@ var MSG = {
     delete: 'حذف', rebuildCache: 'إعادة إنشاء الذاكرة المؤقتة', close: 'إغلاق', storage: 'التخزين',
     fTitleId: 'Title ID', fVersion: 'الإصدار', fStatus: 'الحالة', fType: 'النوع', fDrive: 'المحرك',
     fPath: 'المسار', fCachePath: 'مسار الذاكرة المؤقتة', fCacheSize: 'حجم الذاكرة المؤقتة', fCacheBuilt: 'أُنشئت الذاكرة المؤقتة',
+    fCrash: 'آخر تعطّل', crashHint: 'تعطّلت اللعبة أثناء التشغيل. السبب عادةً النسخة (dump) أو ampr-emu-ng أو بديل PlayGo، وليس التحميل. استخدم «تقرير» عند فتح issue.', report: 'تقرير',
     fBackport: 'الباكبورت', yes: 'نعم', no: 'لا', notBuilt: 'لم تُنشأ',
     playgoStub: 'بديل PlayGo', playgoHint: 'أوقفه إذا بقيت اللعبة على شاشة سوداء، وشغّله إذا طلبت إكمال التنزيل.',
     szGame: 'اللعبة', szDlc: 'DLC', szSave: 'الحفظ', szCache: 'الذاكرة المؤقتة',
@@ -1910,6 +1922,8 @@ function renderModal() {
     [t('fCachePath'), (state.cache && state.cache.path ? state.cache.path : '/data/krakenmount/caches') + '/' + g.title_id, 'mono'],
     [t('fCacheSize'), fmtSize(g.cache_size)], [t('fCacheBuilt'), fmtTime(g.cache_built)], [t('fBackport'), backport]
   ];
+  // The last crash since Kraken Mount started (the console's crash folder for this title).
+  if (g.crash) rows.splice(3, 0, [t('fCrash'), fmtTime(g.crash.at) + (g.crash.process ? ' (' + g.crash.process + ')' : '')]);
   var fields = $('m-fields'), sig = JSON.stringify(rows);
   if (fields._sig !== sig) {
     fields._sig = sig;
@@ -1922,10 +1936,11 @@ function renderModal() {
       fields.appendChild(dd);
     });
   }
-  setText($('m-err'), modalActionError || g.error || '');
+  setText($('m-err'), modalActionError || g.error || (g.crash ? t('crashHint') : ''));
   // A duplicate shares the title id of the library copy: the API calls would act on that copy.
   $('m-rebuild').disabled = g.status === 'duplicate' || g.status === 'building';
   $('m-delete').disabled = g.status === 'duplicate';
+  $('m-report').disabled = g.status === 'duplicate';
   // The PlayGo switch: only for a game whose eboot imports PlayGo, or one turned off already.
   var pg = $('m-playgo');
   $('m-playgo-row').hidden = !(g.playgo === true || g.playgo_off);
@@ -1985,6 +2000,11 @@ function openModal(id, fromCard) {
   $('m-close').focus();
 }
 $('m-close').onclick = closeModal;
+// Plain text for an issue (GET /api/report/<TID>); a browser without pop-ups opens it in place.
+$('m-report').onclick = function () {
+  var url = '/api/report/' + encodeURIComponent(openTid);
+  if (!window.open(url, '_blank')) location.href = url;
+};
 $('m-rebuild').onclick = function () {
   var g = openTid && findGame(openTid);
   if (!g) return;

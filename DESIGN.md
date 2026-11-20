@@ -272,6 +272,15 @@ A single-file nullfs of the .pkg is refused by the kernel (ENOTDIR), hence the f
 All removed on exit, newest first. When a session's cleanup ends, `register::spawn_snd0info(<TID>, 0)` (own thread).
 No overlay when neither layer applies.
 
+## Crash watcher (`src/crash.rs`)
+When an app crashes, the console writes `/user/devlog/system/sce_coredumps.0/<TID>_<n>/` (also seen as
+`/devlog/...`) with `prosperocore-<n>-0x<pid>-<process>.prosperodmp` inside, and deletes the folder
+seconds later. A thread watches that folder (EVFILT_VNODE NOTE_WRITE, else polling every 500 ms); for a
+new `<TID>_<digits>` folder of a title in `State::titles` it looks for the dump for up to 2 s (the file
+can follow its folder) and records `{at, process, folder}` in `State::crashes` (the last crash per title,
+kept in memory until Kraken Mount stops), logging `<TID>: crashed (<process>|process unknown); the
+console's crash dump: <folder path>`. Read-only; no klog. No folder at start: logged once, no watcher.
+
 ## Module interfaces (contract between modules; keep these names)
 ```rust
 // config.rs
@@ -362,8 +371,14 @@ pub fn https_get(url: &str, max: usize) -> std::io::Result<Vec<u8>>;
 - `GET /api/state`:
   `{version, busy, paused, waiting:"kstuff"|"shadowmount"|null, running:[TID], games:[{title_id, title_name, version, path, kind:"pkg"|"folder", packing:"plain"|"zstd"|"lz4"|null,
   drive, size, status:"pending"|"checking"|"building"|"ready"|"error"|"duplicate", error, cache_size, cache_built, backport,
-  playgo: bool|null (the memoized "eboot imports PlayGo", null when unknown or `add_emulators` is off), playgo_off: bool (false while `add_emulators` is off)}],
+  playgo: bool|null (the memoized "eboot imports PlayGo", null when unknown or `add_emulators` is off), playgo_off: bool (false while `add_emulators` is off),
+  crash: {at, process}|null (the last crash since start, see Crash watcher)}],
   drives:[{mount, label, kind, total, free, ejectable}], cache:{path, size, free, low_space, ampr_present}, log:[last 100 lines of the last 64 KiB]}`
+- `GET /api/report/<TID>` -> plain text for an issue: Kraken Mount version, a firmware line to fill in,
+  the game (name, title id, version, source, kind, drive, status and error), ampr-emu-ng (`/api/ampr`
+  kind and version), the PlayGo stub (on, off, or not added), the last crash, and the last 40 lines of
+  the log tail (64 KiB) that contain the title id; 404 for an invalid or absent library title.
+  The game sheet's Report button opens it.
 - `GET /api/settings` -> settings JSON; `POST /api/settings` (JSON body) -> save, apply, rescan; a body
   without `playgo_off` keeps the current list (the settings form does not send it).
 - `POST /api/playgo/<TID>`, body exactly `on` or `off` -> removes the title from / adds it to `playgo_off`,

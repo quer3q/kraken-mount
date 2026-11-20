@@ -3,7 +3,7 @@
 use crate::config::{self, Settings};
 use crate::scan::{Kind, Packing, Source};
 use crate::{cache, register, storage, sys};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -47,6 +47,8 @@ pub struct State {
     pub titles: Arc<Mutex<HashSet<String>>>,
     /// Title ids with a live game session (launch::watch); the scan loop pauses while non-empty.
     pub running: Arc<Mutex<HashSet<String>>>,
+    /// The last crash of each title since start (crash::watch).
+    pub crashes: Arc<Mutex<HashMap<String, crate::crash::Crash>>>,
     rescan: Mutex<bool>,
     wake: Condvar,
 }
@@ -65,6 +67,7 @@ impl State {
             cache_total: Mutex::new(0),
             titles: Arc::new(Mutex::new(HashSet::new())),
             running: Arc::new(Mutex::new(HashSet::new())),
+            crashes: Arc::new(Mutex::new(HashMap::new())),
             rescan: Mutex::new(false),
             wake: Condvar::new(),
         }
@@ -109,7 +112,7 @@ impl State {
 
 /// `playgo_off`: the setting's title ids; None while add_emulators is off (no stub at all, so the
 /// UI shows no switch).
-fn game_json(g: &Game, playgo_off: Option<&[String]>) -> serde_json::Value {
+fn game_json(g: &Game, playgo_off: Option<&[String]>, crash: Option<&crate::crash::Crash>) -> serde_json::Value {
     let (kind, packing) = match g.src.kind {
         Kind::Pkg => ("pkg", None),
         Kind::Folder(Packing::Plain) => ("folder", Some("plain")),
@@ -133,6 +136,7 @@ fn game_json(g: &Game, playgo_off: Option<&[String]>) -> serde_json::Value {
         // ponytail: reads the game's .ampr on every state poll (a few hundred bytes per game).
         "playgo": playgo_off.and_then(|_| crate::cache::playgo_import(&g.src.title_id)),
         "playgo_off": playgo_off.is_some_and(|l| l.iter().any(|t| *t == g.src.title_id)),
+        "crash": crash.map(|c| serde_json::json!({"at": c.at, "process": c.process})),
     })
 }
 
@@ -284,6 +288,7 @@ fn route(state: &State, head: &str, body: &[u8], loopback: bool) -> Reply {
         ("GET", "/app-icon.png") => cached("image/png", APP_ICON),
         ("GET", "/api/state") => reply(200, "application/json", api_state(state)),
         ("GET", p) if p.starts_with("/api/sizes/") => sizes(state, &p["/api/sizes/".len()..]),
+        ("GET", p) if p.starts_with("/api/report/") => report(state, &p["/api/report/".len()..]),
         ("GET", "/api/settings") => {
             let v = config::to_json(&state.settings.lock().unwrap());
             reply(200, "application/json", v.to_string())
@@ -437,12 +442,64 @@ fn dbg_file(path: &str, query: &str) -> Reply {
     }
 }
 
+/// kraken.log lines (with the title id) at the end of a game's report.
+const REPORT_LOG_LINES: usize = 40;
+
+/// GET /api/report/<TID>: plain text to paste into an issue; 404 for an invalid or absent library title.
+fn report(state: &State, tid: &str) -> Reply {
+    if !crate::scan::valid_tid(tid) {
+        return not_found();
+    }
+    let Some(g) = state.games.lock().unwrap().iter().find(|g| g.src.title_id == tid && g.status != "duplicate").cloned()
+    else {
+        return not_found();
+    };
+    let s = state.settings.lock().unwrap().clone();
+    let ampr = crate::ampr_status();
+    let crash = state.crashes.lock().unwrap().get(tid).cloned();
+    let log = log_tail();
+    let log = String::from_utf8_lossy(&log);
+    reply(200, "text/plain; charset=utf-8", report_text(&g, &s, &ampr, crash.as_ref(), &log))
+}
+
+fn report_text(g: &Game, s: &Settings, ampr: &serde_json::Value, crash: Option<&crate::crash::Crash>, log: &str) -> String {
+    let src = &g.src;
+    let kind = match src.kind {
+        Kind::Pkg => "pkg",
+        Kind::Folder(Packing::Plain) => "folder",
+        Kind::Folder(Packing::Zstd) => "folder (zstd)",
+        Kind::Folder(Packing::Lz4) => "folder (lz4)",
+    };
+    let ampr = format!("{} {}", ampr["kind"].as_str().unwrap_or("?"), ampr["version"].as_str().unwrap_or("")).trim_end().to_string();
+    let playgo = if !s.add_emulators { "not added (add_emulators off)" }
+        else if s.playgo_off.iter().any(|t| *t == src.title_id) { "off" } else { "on" };
+    let crash = crash.map_or("none since Kraken Mount started".to_string(), |c| {
+        format!("{} in {} (console dump folder {})", sys::utc(c.at as libc::time_t), c.process.as_deref().unwrap_or("?"), c.folder)
+    });
+    let mut out = format!(
+        "Kraken Mount {}\nFirmware: (please fill in)\nGame: {} ({}), version {}\nSource: {} ({kind}, {})\n\
+         Status: {}{}\nampr-emu-ng: {ampr}\nPlayGo stub: {playgo}\nLast crash: {crash}\n",
+        env!("CARGO_PKG_VERSION"), src.title_name, src.title_id, src.version, src.path.display(), src.drive,
+        g.status, g.error.as_deref().map_or(String::new(), |e| format!(" ({e})")),
+    );
+    let lines: Vec<&str> = log.lines().filter(|l| l.contains(src.title_id.as_str())).collect();
+    out += &format!("\nkraken.log, last {} lines with {}:\n", REPORT_LOG_LINES, src.title_id);
+    for l in &lines[lines.len().saturating_sub(REPORT_LOG_LINES)..] {
+        out += l;
+        out.push('\n');
+    }
+    out
+}
+
 fn api_state(state: &State) -> Vec<u8> {
     let playgo_off = {
         let s = state.settings.lock().unwrap();
         s.add_emulators.then(|| s.playgo_off.clone())
     };
-    let games: Vec<_> = state.games.lock().unwrap().iter().map(|g| game_json(g, playgo_off.as_deref())).collect();
+    let crashes = state.crashes.lock().unwrap().clone();
+    let games: Vec<_> = state.games.lock().unwrap().iter()
+        .map(|g| game_json(g, playgo_off.as_deref(), crashes.get(&g.src.title_id)))
+        .collect();
     let all = storage::drives();
     let drives: Vec<_> = all
         .iter()

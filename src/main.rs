@@ -11,6 +11,7 @@ mod i18n;
 mod ampr_index;
 mod cache;
 mod config;
+mod crash;
 mod launch;
 mod net;
 mod register;
@@ -790,6 +791,8 @@ fn main() {
         }
     }
     std::thread::spawn(move || launch::watch(titles, running));
+    let (titles, crashes) = (state.titles.clone(), state.crashes.clone());
+    std::thread::spawn(move || crash::watch(titles, crashes));
     let (mut registered, mut failed) = (HashSet::new(), HashMap::new());
     // Auto-remove timers start only after the first full pass: a drive not mounted yet at start
     // looks like a missing source until then (the delay covers the rest).

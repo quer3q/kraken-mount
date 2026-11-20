@@ -30,14 +30,17 @@ pub fn uptime_ms() -> u64 {
 /// `2026-11-19 20:51:03Z [10643021] `.
 fn stamp() -> String {
     let now = unsafe { libc::time(std::ptr::null_mut()) };
+    format!("{} [{}] ", utc(now), uptime_ms())
+}
+
+/// Unix seconds as `2026-11-19 20:51:03Z`.
+pub fn utc(secs: libc::time_t) -> String {
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    let wall = if unsafe { libc::gmtime_r(&now, &mut tm) }.is_null() {
-        "????-??-?? ??:??:??Z".to_string()
-    } else {
-        format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}Z", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                tm.tm_hour, tm.tm_min, tm.tm_sec)
-    };
-    format!("{wall} [{}] ", uptime_ms())
+    if unsafe { libc::gmtime_r(&secs, &mut tm) }.is_null() {
+        return "????-??-?? ??:??:??Z".to_string();
+    }
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}Z", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, tm.tm_sec)
 }
 
 pub fn log_line(line: &str) {
