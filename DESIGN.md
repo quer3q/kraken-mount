@@ -82,7 +82,8 @@ is ignored as a whole). The web UI edits the same file.
 - Folder: `fakelib/` only. `/app0` is the game folder itself.
 - FPKG: it IS `/app0`: `sce_sys/**` (with the files only the pkg container holds: `save_data.png`,
   `pic0`/`pic1`, `snd0.at9`, `trophy00.ucp`, `nptitle.dat`, `npbind.dat`, which save data and
-  trophies read from `/app0/sce_sys`), `eboot.bin`, every `*.prx`/`*.sprx`, and a root-level `dlc_emu.ini` / `playgo_stub.dat` (the emulators
+  trophies read from `/app0/sce_sys`), `eboot.bin`, every `*.prx`/`*.sprx`, every `*.elf` outside `decrypted/`
+  (SceSysCore loads an exit-spawned ELF, which may sit in a subfolder, from disk, never through ng), and a root-level `dlc_emu.ini` / `playgo_stub.dat` (the emulators
   open `/app0/<name>`; an older cache lacks them loose, ng still serves them from the pkg) extracted (0777),
   `fakelib/`, `kraken/` (mount point for the pkg's folder, see Launch), `kraken.image` (one line, no
   newline: `kraken/<pkg file name>`, relative to `/app0`, the file ng opens; missing means stale), `ampr_emu.index` +
@@ -269,7 +270,14 @@ mount of the ampr dir. Also nullfs of `/data` at `<sandbox>/data`, plus a nullfs
 registered stack, backport unionfs included) over it; for a pkg game, a nullfs of the pkg's folder
 (from the `.done` stamp's "source") at `<sandbox>/app0/kraken`; ng opens the .pkg named in `/app0/kraken.image`.
 A single-file nullfs of the .pkg is refused by the kernel (ENOTDIR), hence the folder mount.
-All removed on exit, newest first. When a session's cleanup ends, `register::spawn_snd0info(<TID>, 0)` (own thread).
+All removed on exit, newest first: the nullfs mounts at once (left in the sandbox they hang ShellCore's
+teardown and the console powers off), the overlay once ShellCore takes it down with common/lib (checked
+every 250 ms), at most 3 s later (`EXIT_GRACE_MS`), or when the sandbox dir goes. An exec of the same title
+in the same sandbox meanwhile (an exit-spawned ELF; a new overlay would fail with EBUSY)
+cancels that and mounts the nullfs mounts again (~10 ms after the exec: the forked child gets its title id
+only at the exec, so they cannot go back earlier). When the exec fallback cannot mount the overlay, they are
+still mounted. A later copy of the payload adopts the overlay, `/data`, USB and `/app0/kraken` mounts.
+When a session's cleanup ends, `register::spawn_snd0info(<TID>, 0)` (own thread).
 No overlay when neither layer applies.
 
 ## Module interfaces (contract between modules; keep these names)

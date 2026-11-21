@@ -1,5 +1,5 @@
 //! Per-game cache /data/krakenmount/caches/<TID> (DESIGN.md "Cache"). Folder: fakelib/ only.
-//! FPKG: the cache is /app0: sce_sys, eboot.bin and every PRX extracted, fakelib/, kraken/ (launch.rs
+//! FPKG: the cache is /app0: sce_sys, eboot.bin and every PRX and ELF extracted, fakelib/, kraken/ (launch.rs
 //! mounts the pkg's folder there), the two AMPR indexes; `.done` (JSON stamp, mtime = build start) last.
 //! fakelib/ (both kinds) = the game's or backport's libs, then /data/krakenmount/ampr/* copied on
 //! top (inject_ampr; always for a pkg); in between, the bundled DLC (dlc_emu) and PlayGo (pgo_stub)
@@ -74,7 +74,9 @@ fn vfs(e: kraken_mount_pkg::Error) -> Error {
     }
 }
 
-/// Files copied out of the pkg: sce_sys/**, eboot.bin, any *.prx / *.sprx, and the root-level
+/// Files copied out of the pkg: sce_sys/**, eboot.bin, any *.prx / *.sprx, any *.elf outside
+/// decrypted/ (an app can exit-spawn an ELF from a subfolder, which SceSysCore loads from disk;
+/// dump-forge's decrypted/ copy is never run), and the root-level
 /// dlc_emu.ini / playgo_stub.dat (the emulators fopen /app0/<name>).
 /// ponytail: no STAMP_V bump for the last two: an older cache lacks them loose, ng still serves them
 /// from the pkg through the index.
@@ -84,6 +86,7 @@ fn extracted(path: &str) -> bool {
         || lower == "eboot.bin"
         || lower.ends_with(".prx")
         || lower.ends_with(".sprx")
+        || (lower.ends_with(".elf") && !lower.starts_with("decrypted/"))
         || lower == DLC_INI
         || lower == "playgo_stub.dat"
 }
@@ -391,8 +394,8 @@ fn lib_dir(src: &Source) -> Option<PathBuf> {
 
 /// The cache layout version in the stamp. 2: the pkg reader also extracts container-only sce_sys
 /// files (save_data.png, pic0/pic1, snd0.at9, trophy00.ucp, nptitle.dat, npbind.dat), and files the
-/// index cannot map are extracted; every v1 cache rebuilds once.
-const STAMP_V: u64 = 2;
+/// index cannot map are extracted; every v1 cache rebuilds once. 3: *.elf outside decrypted/ extracted too.
+const STAMP_V: u64 = 3;
 
 pub fn stamp(src: &Source, _s: &Settings) -> serde_json::Value {
     serde_json::json!({

@@ -19,6 +19,9 @@ const READY_WAIT_MS: u64 = 3000;
 const RETRY_MS: u64 = 250;
 /// SMP GAME_SANDBOX_CLEANUP_TIMEOUT_US: busy unmount retries stop here; then one MNT_FORCE.
 const CLEANUP_TIMEOUT_MS: u64 = 10_000;
+/// The overlay outlives an app's exit this long: an exit-spawned ELF of the same title (~0.4 s later)
+/// execs in the same sandbox, which cannot take a new overlay any more (EBUSY).
+const EXIT_GRACE_MS: u64 = 3000;
 /// SMP: unresolved exec pids are kept up to 32 and repolled for up to 11 s.
 const PENDING_MAX: usize = 32;
 const PENDING_TIMEOUT_MS: u64 = 11_000;
@@ -246,6 +249,8 @@ struct Session {
     pid: Option<libc::pid_t>,
     /// (deadline, next try) of a busy cleanup, in now_ms.
     cleanup: Option<(u64, u64)>,
+    /// After an exit: the overlay is kept until this now_ms while it stays on top of common/lib.
+    grace: Option<u64>,
 }
 
 impl Session {
@@ -256,7 +261,9 @@ impl Session {
         if has_files(&fakelib) {
             srcs.push(fakelib);
         }
-        Session { tid: tid.to_string(), lib: None, srcs, layers: Vec::new(), data: Vec::new(), pid: None, cleanup: None }
+        Session {
+            tid: tid.to_string(), lib: None, srcs, layers: Vec::new(), data: Vec::new(), pid: None, cleanup: None, grace: None,
+        }
     }
 
     /// Index in `srcs` of our overlay on top of common/lib now, if one is.
@@ -345,7 +352,7 @@ impl Session {
     /// A read-write nullfs of /system_ex/app/<TID> (the registered app0 stack, backport unionfs
     /// included) over the sandbox's /app0, only when the system's one is read-only. Not yet mounted
     /// at the sandbox's first sight: the exec pass (mount_data again) gets it.
-    /// ponytail: not adopted by a later copy of the payload (adopt_existing only knows /data and USB).
+    /// ponytail: not adopted by a later copy of the payload (adopt knows /data, USB and /app0/kraken).
     /// False while the system's /app0 is not mounted (then /app0/kraken must wait too).
     fn mount_app0(&mut self, app0: &str) -> bool {
         let from = format!("/system_ex/app/{}", self.tid);
@@ -628,6 +635,15 @@ impl Watcher {
                     s.data.push((path.clone(), m.fsid));
                 }
             }
+            // /app0/kraken too: left behind on exit it hangs the sandbox teardown like /data.
+            let pkg_dir = crate::cache::pkg_source(&tid)
+                .and_then(|p| std::path::Path::new(&p).parent().and_then(|d| d.to_str()).map(str::to_string));
+            if let Some(from) = pkg_dir {
+                let path = format!("{root}/app0/{}", crate::cache::PKG_MOUNT_DIR);
+                for m in all.iter().filter(|m| m.on == path && m.fstype == "nullfs" && m.from == from) {
+                    s.data.push((path.clone(), m.fsid));
+                }
+            }
             s.lib = Some(lib.clone());
             match find_title_pid(&tid) {
                 Some(pid) => {
@@ -667,6 +683,7 @@ impl Watcher {
         for name in gone {
             if let Some(s) = self.sessions.get_mut(&name) {
                 tlog!("{} sandbox gone: {name}", s.tid);
+                s.grace = None;
                 s.cleanup.get_or_insert((now_ms() + CLEANUP_TIMEOUT_MS, 0));
             }
         }
@@ -790,6 +807,7 @@ impl Watcher {
         let top = s.top_layer();
         let on_top = top.is_some_and(|i| i + 1 == s.srcs.len());
         tlog!("{tid} exec pid={pid} sandbox={name}: overlay {}", if on_top { "already there" } else { "MISSING" });
+        s.grace = None;
         if s.cleanup.take().is_some() {
             tlog!("{tid} pending cleanup cancelled by exec");
         }
@@ -799,15 +817,20 @@ impl Watcher {
             // (mount_dir keeps the ones still in place).
             Some(lib) if on_top => s.mount_data(&lib),
             _ if s.srcs.is_empty() => tlog!("{tid} empty fakelib, nothing to overlay; not mounting"),
-            Some(_) if top.is_some() => {
-                s.mount(top.map_or(0, |i| i + 1), "exec fallback");
+            // A failed overlay still gets /data and /app0/kraken: without them ng cannot open the .pkg.
+            Some(lib) if top.is_some() => {
+                if !s.mount(top.map_or(0, |i| i + 1), "exec fallback") {
+                    s.mount_data(&lib);
+                }
             }
             Some(lib) => match top_mount(&lib) {
                 Ok(t) if t.on == lib && t.fstype == "unionfs" => {
                     tlog!("{tid} common/lib occupied by unionfs from {}; not mounting", t.from)
                 }
                 _ => {
-                    s.mount(0, "exec fallback");
+                    if !s.mount(0, "exec fallback") {
+                        s.mount_data(&lib);
+                    }
                 }
             },
         }
@@ -824,9 +847,20 @@ impl Watcher {
     /// Strategy 3: the game exited, unmount so ShellCore can tear the sandbox down.
     fn on_exit(&mut self, pid: libc::pid_t) {
         self.pending.retain(|p| p.0 != pid);
+        let now = now_ms();
         for (name, s) in self.sessions.iter_mut().filter(|(_, s)| s.pid == Some(pid)) {
             tlog!("{} exit pid={pid} sandbox={name}", s.tid);
-            s.cleanup.get_or_insert((now_ms() + CLEANUP_TIMEOUT_MS, 0));
+            // Our nullfs mounts inside the sandbox block ShellCore's teardown (the close hangs, then the
+            // console powers off): they go now. Only the overlay waits for an exit-spawned ELF.
+            let wait = match s.unmount_data(0) {
+                None => EXIT_GRACE_MS,
+                Some(code) => {
+                    tlog!("{} sandbox mount busy on exit errno={code}; cleaning up now: {name}", s.tid);
+                    0
+                }
+            };
+            s.grace = (wait > 0).then_some(now + wait);
+            s.cleanup.get_or_insert((now + wait + CLEANUP_TIMEOUT_MS, now + wait.min(RETRY_MS)));
         }
     }
 
@@ -836,11 +870,22 @@ impl Watcher {
         let now = now_ms();
         let mut done = Vec::new();
         for (name, s) in self.sessions.iter_mut() {
-            let Some((deadline, next)) = s.cleanup else { continue };
+            let Some((mut deadline, next)) = s.cleanup else { continue };
             if now < next {
                 continue;
             }
-            let first = next == 0;
+            if let Some(end) = s.grace {
+                // A real exit: ShellCore's teardown takes common/lib and our overlay with it. A spawn keeps it.
+                if now < end && s.top_layer().is_some() {
+                    s.cleanup = Some((deadline, now + RETRY_MS));
+                    continue;
+                }
+                tlog!("{} no exec after exit ({}); cleaning up: {name}", s.tid,
+                    if now < end { "overlay taken down" } else { "wait over" });
+                s.grace = None;
+                deadline = now + CLEANUP_TIMEOUT_MS;
+            }
+            let first = deadline.saturating_sub(now) + RETRY_MS > CLEANUP_TIMEOUT_MS;
             match s.unmount_pass(false) {
                 None => {
                     tlog!("{} cleanup done: {name}", s.tid);
