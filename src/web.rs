@@ -778,20 +778,29 @@ fn post_ng(state: &State, tid: &str, body: &[u8]) -> Reply {
     }
 }
 
-/// The fakelib overlay of one library title on (`off` false) or off (overlay_off). Off is refused
-/// for a pkg: it needs ampr-emu-ng's pkg mode.
-fn set_overlay(state: &State, tid: &str, off: bool) -> Result<(), Fail> {
-    let Some(src) = Some(tid).filter(|t| crate::scan::valid_tid(t)).and_then(|t| state.source(t)) else {
+/// The fakelib overlay of one title on (`off` false) or off (overlay_off). Off is refused for a pkg:
+/// it needs ampr-emu-ng's pkg mode. `unlisted`: a valid title id not in the library is set too
+/// (games/fakelib: a launcher sets it before the title's folder is first scanned, which waits while
+/// the launcher runs, so the first build and launch already go without the overlay); else 404.
+/// Ok(listed).
+fn set_overlay(state: &State, tid: &str, off: bool, unlisted: bool) -> Result<bool, Fail> {
+    if !crate::scan::valid_tid(tid) {
         return Err(fail(404, libc::ENOENT, "not found"));
-    };
-    if off && src.kind == Kind::Pkg {
+    }
+    let src = state.source(tid);
+    if src.is_none() && !unlisted {
+        return Err(fail(404, libc::ENOENT, "not found"));
+    }
+    // ponytail: an unlisted title that turns out to be a pkg keeps its overlay anyway (cache.rs
+    // overlay_off ignores pkg sources); only a listed pkg is refused here.
+    if let Some(src) = src.as_ref().filter(|s| off && s.kind == Kind::Pkg) {
         log!("{tid}: overlay off refused: {} is a pkg (needs ampr-emu-ng's pkg mode)", src.path.display());
         return Err(fail(409, libc::EPERM, "a pkg game needs its overlay (ampr-emu-ng's pkg mode)"));
     }
     if change_settings(state, &format!("{tid}: overlay"), |s| set_member(&mut s.overlay_off, tid, off)).map_err(save_fail)? {
-        log!("{tid}: overlay {}", if off { "off" } else { "on" });
+        log!("{tid}: overlay {}{}", if off { "off" } else { "on" }, if src.is_none() { " (not in the library yet)" } else { "" });
     }
-    Ok(())
+    Ok(src.is_some())
 }
 
 /// POST /api/overlay/<TID>, body `on` or `off`.
@@ -802,8 +811,8 @@ fn post_overlay(state: &State, tid: &str, body: &[u8]) -> Reply {
         _ if !crate::scan::valid_tid(tid) || state.source(tid).is_none() => return not_found(),
         _ => return reply(400, "text/plain", "expected on or off"),
     };
-    match set_overlay(state, tid, off) {
-        Ok(()) => no_content(),
+    match set_overlay(state, tid, off, false) {
+        Ok(_) => no_content(),
         Err(f) => f.text(),
     }
 }
@@ -1849,7 +1858,8 @@ fn v1(state: &State, route: &str, body: &[u8]) -> Reply {
         "version" => Ok(json!({
             "api_version": 1,
             "kraken_mount_version": env!("CARGO_PKG_VERSION"),
-            "capabilities": ["list_games", "add_manual_source", "remove_manual_source", "uninstall_game", "rescan", "fakelib"],
+            "capabilities": ["list_games", "add_manual_source", "remove_manual_source", "uninstall_game", "rescan", "fakelib",
+                "fakelib_unlisted"],
         })),
         "games" => Ok(v1_games(state)),
         "scan" => {
@@ -1862,8 +1872,9 @@ fn v1(state: &State, route: &str, body: &[u8]) -> Reply {
         "games/fakelib" => {
             let tid = str_field(&b, "title_id")?;
             let off = fakelib_off(&b)?;
-            set_overlay(state, tid, off)?;
-            Ok(json!({"fakelib_mode": if off { "disabled" } else { "full" }, "saved": true, "applies_on_next_launch": true}))
+            let listed = set_overlay(state, tid, off, true)?;
+            Ok(json!({"fakelib_mode": if off { "disabled" } else { "full" }, "saved": true, "applies_on_next_launch": true,
+                "listed": listed}))
         }
         _ => Err(fail(404, libc::ENOENT, "unknown route")),
     });

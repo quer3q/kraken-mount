@@ -839,7 +839,8 @@ answers, and two copies would scan at once. The install fails and its marker mea
   else `{status: <FreeBSD errno>, error}` with HTTP 400 (EINVAL), 404 (ENOENT; also an unknown route), 409
   (EBUSY, EPERM, EINVAL), 500 (a config save error's errno) or 501 (ENOTSUP). Routes (SMP meaning -> Kraken Mount):
   - `version` -> `{status, api_version: 1, kraken_mount_version, capabilities: ["list_games", "add_manual_source",
-    "remove_manual_source", "uninstall_game", "rescan", "fakelib"]}`.
+    "remove_manual_source", "uninstall_game", "rescan", "fakelib", "fakelib_unlisted"]}`. A client checks a capability, not
+    the version: `fakelib_unlisted` = `games/fakelib` takes a title not in the library yet.
   - `games` -> `{status, count, games: [{title_id, name, version, path, runtime_path (folder: path; pkg: ""),
     source_type: "folder"|"pkg"|"installed", managed: true (installed: false), installed (= registered), mounted, source_available (= source_present),
     status (the Kraken status), error ("" when none), fakelib_mode: "full"|"disabled" (overlay_off, folder and installed sources only)}]}`; library
@@ -860,8 +861,12 @@ answers, and two copies would scan at once. The install fails and its marker mea
     ponytail: a non-UTF-8 source path is excluded by its lossy text, which then matches nothing.
   - `games/fakelib {title_id, mode}` (`disabled` = overlay off; `full` or `default` = on; `emulators` 501 ENOTSUP;
     other 400 EINVAL) or `{title_id, ignore_global_fakelib: bool}` (true = off; `mode` wins when both) -> as
-    `/api/overlay` (`set_overlay`: absent title 404 ENOENT, off for a pkg 409 EPERM) ->
-    `{status, fakelib_mode, saved: true, applies_on_next_launch: true}`.
+    `/api/overlay` (`set_overlay`: invalid title id 404 ENOENT, off for a pkg of the library 409 EPERM) ->
+    `{status, fakelib_mode, saved: true, applies_on_next_launch: true, listed}`. A valid title id not in the library
+    (`listed: false`) is still put in or taken off `overlay_off` and saved: a launcher sets it before its title folder
+    is first scanned (scans wait while the launcher runs), so the first build already makes an empty `fakelib/`
+    (`inputs_key` holds `overlay_off`). ponytail: such a title that turns out to be a pkg keeps its overlay
+    (`cache::overlay_off` ignores pkg sources). `/api/overlay` stays 404 for a title not in the library.
 - `GET /api/install` -> `{current: Job|null, queue: [id], results: [[id, text]], installable: [row], kept: [row]}`
   (see Install). Job = `{id, title_id, name, kind: "game"|"update"|"patch"|"dlc", done_bytes, total_bytes,
   phase: "wait"|"download"|"install", error}` (`error` is always null, reserved: a job's error is in `results`); `results` = the last result per source path: `done`, `cancelled` or
