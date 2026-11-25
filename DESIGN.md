@@ -256,7 +256,11 @@ redoes the missing app0 nullfs (gone after a reboot); for such a pkg the scan re
 the cache's `sce_sys/param.json` and opens the .pkg only for its memoized class (`pkg_class`, once per run per
 size+mtime). A fresh title registered by this run still
 gets `register::mount` every scan (a no-op when app0 is mounted there; redoes it after a USB replug);
-a title that leaves the scan is forgotten, so it goes through the full path when it is back.
+a title that leaves the scan is forgotten, so it goes through the full path when it is back. So is a title
+uninstalled outside Kraken Mount (another tool's `sceAppInstUtilAppUnInstall`, the home screen's Delete): each pass
+checks `register::staged` (two stats: `/user/app/<TID>/sce_sys/param.json`, `/user/appmeta/<TID>/param.json`) for a
+title in the registered set, logs `<TID>: no longer on the home screen; registering again` when either is gone and
+takes it out of the set. ponytail: an app.db row deleted with both files left is not seen.
 A moved game (`Fresh::Moved`, not forced): a folder's `/system_ex/app/<TID>` stack is redone on the
 new folder first (`register::remount`, backport unionfs included, never MNT_FORCE), then
 `cache::relink`; logged with the title id and both paths, toast `i18n::moved`; then the usual
@@ -630,6 +634,7 @@ pub fn register(title_id: &str, app0: &std::path::Path, sce_sys: &std::path::Pat
 pub fn register_tile(port: u16);
 pub fn tile_staged() -> bool;                             // FW 12+: the tile waits for the pass's install_all
 pub fn is_registered(title_id: &str) -> bool;
+pub fn staged(title_id: &str) -> bool;                     // both staged param.json files exist (two stats; is_registered's first check)
 pub fn registered(tids: &[&str]) -> Vec<bool>;            // is_registered for many, in tids order, one app.db read (all false when unreadable)
 pub fn set_snd0info(title_id: &str);                      // app.db snd0info -> /user/appmeta/<TID>/snd0.at9; logs, never fails
 pub fn spawn_snd0info(title_id: &str, delay_ms: u64);    // set_snd0info on its own thread after delay_ms
@@ -839,8 +844,9 @@ answers, and two copies would scan at once. The install fails and its marker mea
   else `{status: <FreeBSD errno>, error}` with HTTP 400 (EINVAL), 404 (ENOENT; also an unknown route), 409
   (EBUSY, EPERM, EINVAL), 500 (a config save error's errno) or 501 (ENOTSUP). Routes (SMP meaning -> Kraken Mount):
   - `version` -> `{status, api_version: 1, kraken_mount_version, capabilities: ["list_games", "add_manual_source",
-    "remove_manual_source", "uninstall_game", "rescan", "fakelib", "fakelib_unlisted"]}`. A client checks a capability, not
-    the version: `fakelib_unlisted` = `games/fakelib` takes a title not in the library yet.
+    "remove_manual_source", "uninstall_game", "rescan", "fakelib", "fakelib_unlisted", "reregister_missing"]}`. A client
+    checks a capability, not the version: `fakelib_unlisted` = `games/fakelib` takes a title not in the library yet;
+    `reregister_missing` = a title uninstalled outside Kraken Mount registers again at the next pass, with no restart.
   - `games` -> `{status, count, games: [{title_id, name, version, path, runtime_path (folder: path; pkg: ""),
     source_type: "folder"|"pkg"|"installed", managed: true (installed: false), installed (= registered), mounted, source_available (= source_present),
     status (the Kraken status), error ("" when none), fakelib_mode: "full"|"disabled" (overlay_off, folder and installed sources only)}]}`; library

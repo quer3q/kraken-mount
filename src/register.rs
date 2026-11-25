@@ -597,9 +597,7 @@ pub fn sync_snd0info_if_changed(tids: &HashSet<String>) {
 /// ponytail: app.db is searched for the TID bytes, no SELECT; a deleted row still in a free page
 /// reads as registered (a rebuild re-registers). Unreadable app.db = not registered.
 pub fn is_registered(title_id: &str) -> bool {
-    if !Path::new(APP_BASE).join(title_id).join("sce_sys/param.json").is_file()
-        || !Path::new(APPMETA_BASE).join(title_id).join("param.json").is_file()
-    {
+    if !staged(title_id) {
         return false;
     }
     match fs::read(APP_DB) {
@@ -611,19 +609,20 @@ pub fn is_registered(title_id: &str) -> bool {
     }
 }
 
+/// The two staged files of a registration (/user/app/<TID>/sce_sys/param.json and
+/// /user/appmeta/<TID>/param.json): two stats, cheap enough for every scan pass.
+pub fn staged(title_id: &str) -> bool {
+    Path::new(APP_BASE).join(title_id).join("sce_sys/param.json").is_file()
+        && Path::new(APPMETA_BASE).join(title_id).join("param.json").is_file()
+}
+
 /// is_registered for many titles (web API status) with one pass over one app.db read, in `tids` order.
 
 static DB_READ_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// ponytail: read on every call (each /api/state poll); app.db is a few MB at most.
 pub fn registered(tids: &[&str]) -> Vec<bool> {
-    let staged: Vec<bool> = tids
-        .iter()
-        .map(|t| {
-            Path::new(APP_BASE).join(t).join("sce_sys/param.json").is_file()
-                && Path::new(APPMETA_BASE).join(t).join("param.json").is_file()
-        })
-        .collect();
+    let staged: Vec<bool> = tids.iter().map(|t| staged(t)).collect();
     if !staged.contains(&true) {
         return staged;
     }

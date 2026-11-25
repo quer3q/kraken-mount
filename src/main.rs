@@ -192,6 +192,13 @@ fn process(
         // Kraken may mount it now: a later install of it gets its stack checked again.
         NO_OLD_MOUNT.lock().unwrap().retain(|t| t != tid);
     }
+    // Uninstalled outside Kraken Mount since this run registered it (a launcher's own remover, or
+    // the home screen's Delete): its staged files are gone, so it registers in full again.
+    // ponytail: two stats per title per pass; a deleted app.db row with the files left is not seen.
+    if src.kind != Kind::Installed && registered.contains(tid) && !register::staged(tid) {
+        log!("{tid}: no longer on the home screen; registering again");
+        registered.remove(tid);
+    }
     let mut fresh = cache::check(src, s);
     if let (false, Fresh::Moved(from)) = (forced, &fresh) {
         fresh = match relink_moved(s, src, from) {

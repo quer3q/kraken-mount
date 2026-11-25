@@ -1859,7 +1859,7 @@ fn v1(state: &State, route: &str, body: &[u8]) -> Reply {
             "api_version": 1,
             "kraken_mount_version": env!("CARGO_PKG_VERSION"),
             "capabilities": ["list_games", "add_manual_source", "remove_manual_source", "uninstall_game", "rescan", "fakelib",
-                "fakelib_unlisted"],
+                "fakelib_unlisted", "reregister_missing"],
         })),
         "games" => Ok(v1_games(state)),
         "scan" => {
