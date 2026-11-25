@@ -444,7 +444,7 @@ pub fn enqueue(item: Item) -> Result<(), (u16, String)> {
                 PkgKind::Dlc => "dlc",
             };
             let src = Source { path: p.path, kind: Kind::Pkg, title_id: p.title_id, title_name: p.title_name,
-                version: p.version, drive: p.drive, size: p.size, backport: None };
+                version: p.version, drive: p.drive, size: p.size, backport: None, image: None };
             (src, kind)
         }
     };

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Same toolchain as ps5/Dockerfile. The crate builds only for FreeBSD/PS5: no cargo test.
-      RUSTUP_TOOLCHAIN: 1.99.0
+      RUSTUP_TOOLCHAIN: 1.100.0
       RUSTFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v4

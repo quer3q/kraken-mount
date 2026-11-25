@@ -939,9 +939,12 @@ button.swatch[aria-checked="true"] { border-color: transparent; box-shadow: none
 .bprow .bpstate { flex: none; min-width: 11rem; text-align: center; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-size: 1rem; font-weight: 600; background: var(--surface-2); color: var(--muted); }
 .bprow .bpstate.on { background: var(--ok-bg); color: var(--ok); }
 .bprow button { flex: none; }
-#bplist:empty, #hdlist:empty { display: none; }
+#bplist:empty, #hdlist:empty, #imlist:empty { display: none; }
+.bprow .bpstate.err { background: var(--danger-bg); color: var(--danger); }
+.bprow .imerr { flex-basis: 100%; color: var(--danger); font-size: 1.1rem; overflow-wrap: anywhere; }
 .bprow .hdkind { flex: none; min-width: 3.5rem; text-align: center; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font: 600 1rem var(--font-mono); background: var(--surface-2); color: var(--ink-2); }
-#hdlist code { flex-basis: 12rem; }
+#hdlist code, #imlist code { flex-basis: 12rem; }
+#imlist .bpstate { min-width: 9rem; }
 /* Storage screen: one card per connected drive. */
 .dcard { padding: var(--space-4) var(--space-5); }
 .dhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-3); }
@@ -1142,6 +1145,10 @@ html.kbd .sheet button.primary:focus { background: var(--accent); border-color: 
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4.5a2 2 0 0 1 4 0V6h4v4h-1.5a2 2 0 0 0 0 4H18v4h-4v-1.5a2 2 0 0 0-4 0V18H6v-4h1.5a2 2 0 0 0 0-4H6V6h4z"/></svg>
       <span class="rail-label" data-i18n="backportsTab">Backports</span>
     </button>
+    <button class="seg-opt rail-item" role="tab" id="tab-images" aria-selected="false" aria-controls="images" data-view="images" type="button">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3v3M12 18v3"/></svg>
+      <span class="rail-label" data-i18n="imagesTab">Images</span>
+    </button>
     <button class="seg-opt rail-item" role="tab" id="tab-drives" aria-selected="false" aria-controls="drives" data-view="drives" type="button">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
       <span class="rail-label" data-i18n="storage">Storage</span>
@@ -1272,6 +1279,15 @@ html.kbd .sheet button.primary:focus { background: var(--accent); border-color: 
   </div>
 </section>
 
+<section id="images" role="tabpanel" aria-labelledby="tab-images" hidden>
+  <div class="settings">
+    <div class="settings-top"><h2 data-i18n="imagesTab">Images</h2></div>
+    <p class="bphint" data-i18n="imHint" data-args="ext=.exfat, .ffpkg, .ffpfs, .ffpfsc" data-wrap="ext=code">Image files (.exfat, .ffpkg, .ffpfs, .ffpfsc) in the scan folders. Each is read before it is mounted; one holding a game is mounted read-only and the game shows up in the Library.</p>
+    <div class="group" id="imlist"></div>
+    <p class="dstats" id="imempty" hidden data-i18n="imNone">No image files found in the scan folders.</p>
+  </div>
+</section>
+
 <section id="drives" role="tabpanel" aria-labelledby="tab-drives" hidden>
   <div class="settings">
     <div class="settings-top"><h2 data-i18n="storage">Storage</h2></div>
@@ -1395,7 +1411,7 @@ html.kbd .sheet button.primary:focus { background: var(--accent); border-color: 
         <span class="hint" data-i18n="playgoHint">Turn off if the game stays on a black screen; turn on if it asks to finish the download.</span></span>
         <input type="checkbox" id="m-playgo"></label>
       <label class="row m-row" id="m-ng-row" hidden><span><span class="lbl" data-i18n="ngLbl">ampr-emu-ng</span>
-        <span class="hint" data-i18n="ngHint">On: the game runs through ampr-emu-ng (an installed debug FPKG starts from its app.pkg, without the console's license check). Off: the console's own AMPR.</span></span>
+        <span class="hint" id="m-ng-hint" data-i18n="ngHint">On: the game runs through ampr-emu-ng (an installed debug FPKG starts from its app.pkg, without the console's license check). Off: the console's own AMPR.</span></span>
         <input type="checkbox" id="m-ng"></label>
       <label class="row m-row" id="m-overlay-row" hidden><span><span class="lbl" data-i18n="overlayLbl">Kraken Mount libraries</span>
         <span class="hint" data-i18n="overlayHint">Turn off only for apps that bring their own system libraries (Playden titles): the game then runs without ampr-emu-ng and the bundled emulators.</span></span>
@@ -1495,6 +1511,7 @@ var MSG = {
     playgoStub: 'PlayGo stub', playgoHint: 'Turn off if the game stays on a black screen; turn on if it asks to finish the download.',
     overlayLbl: 'Kraken Mount libraries', overlayHint: 'Turn off only for apps that bring their own system libraries (Playden titles): the game then runs without ampr-emu-ng and the bundled emulators.',
     ngLbl: 'ampr-emu-ng', ngHint: 'On: the game runs through ampr-emu-ng (an installed debug FPKG starts from its app.pkg, without the console\'s license check). Off: the console\'s own AMPR.',
+    ngFolderHint: 'Turn off if the game closes right after the ampr-emu-ng notice.',
     discTitle: 'Launch from the disc', discText: 'Retail copy: it starts only with its disc in the console, from the home screen. Kraken Mount cannot launch it.',
     szGame: 'Game', szDlc: 'DLC', szSave: 'Save', szCache: 'Cache',
     szPart: '{part} {size}', szNa: '{part} n/a', szTotal: 'Total {size}',
@@ -1561,6 +1578,7 @@ var MSG = {
     gNotify: 'Notifications & log', gMaint: 'Maintenance', expandMenu: 'Expand menu', collapseMenu: 'Collapse menu',
     hideTitle: 'Hide {name}?', hideText: 'It leaves the home screen and the library. Its files stay at {path}; Unhide it from the Hidden screen.',
     backportsTab: 'Backports', bpDeleteAll: 'Delete all', bpNone: 'No backports found.',
+    imagesTab: 'Images', imHint: 'Image files ({ext}) in the scan folders. Each is read before it is mounted; one holding a game is mounted read-only and the game shows up in the Library.', imNone: 'No image files found in the scan folders.', imMounted: 'Mounted', imCopying: 'Being copied', imDetails: 'Details',
     bpHint: 'Folders in {dir} of a scan root replace the game\'s files at launch.',
     bpOff: 'Backports are off in Settings: none of these are applied.',
     bpApplied: 'Applied', bpPending: 'Applies on next build', bpOffState: 'Off',
@@ -1657,6 +1675,7 @@ var MSG = {
     playgoStub: 'Заглушка PlayGo', playgoHint: 'Выключите, если игра остаётся на чёрном экране; включите, если она просит завершить загрузку.',
     overlayLbl: 'Библиотеки Kraken Mount', overlayHint: 'Выключайте только для приложений со своими системными библиотеками (тайтлы Playden): тогда игра запускается без ampr-emu-ng и встроенных эмуляторов.',
     ngLbl: 'ampr-emu-ng', ngHint: 'Вкл.: игра запускается через ampr-emu-ng (установленный debug FPKG стартует из своего app.pkg, без проверки лицензии консоли). Выкл.: собственный AMPR консоли.',
+    ngFolderHint: 'Выключите, если игра закрывается сразу после уведомления ampr-emu-ng.',
     discTitle: 'Запуск с диска', discText: 'Розничная копия: запускается только с диском в консоли, с главного экрана. Kraken Mount не может её запустить.',
     szGame: 'Игра', szDlc: 'DLC', szSave: 'Сохранения', szCache: 'Кеш',
     szPart: '{part} {size}', szNa: '{part} н/д', szTotal: 'Всего {size}',
@@ -1721,6 +1740,7 @@ var MSG = {
     gNotify: 'Уведомления и журнал', gMaint: 'Обслуживание', expandMenu: 'Развернуть меню', collapseMenu: 'Свернуть меню',
     hideTitle: 'Скрыть {name}?', hideText: 'Игра пропадёт с главного экрана и из библиотеки. Её файлы останутся в {path}; вернуть её можно в разделе «Скрытые».',
     backportsTab: 'Бэкпорты', bpDeleteAll: 'Удалить все', bpNone: 'Бэкпорты не найдены.',
+    imagesTab: 'Образы', imHint: 'Файлы образов ({ext}) в папках сканирования. Каждый сначала читается без монтирования; образ с игрой монтируется только для чтения, и игра появляется в библиотеке.', imNone: 'В папках сканирования нет файлов образов.', imMounted: 'Смонтирован', imCopying: 'Копируется', imDetails: 'Подробнее',
     bpHint: 'Папки {dir} в корне сканирования при запуске заменяют файлы игры.',
     bpOff: 'Бэкпорты выключены в настройках: ни один из них не применяется.',
     bpApplied: 'Применён', bpPending: 'Применится при следующей сборке', bpOffState: 'Выключен',
@@ -1817,6 +1837,7 @@ var MSG = {
     playgoStub: 'PlayGo 存根', playgoHint: '如果游戏停留在黑屏，请关闭；如果游戏要求完成下载，请开启。',
     overlayLbl: 'Kraken Mount 库', overlayHint: '仅对自带系统库的应用（Playden 游戏）关闭：关闭后游戏将在没有 ampr-emu-ng 和内置模拟器的情况下运行。',
     ngLbl: 'ampr-emu-ng', ngHint: '开启：游戏通过 ampr-emu-ng 运行（已安装的调试 FPKG 从其 app.pkg 启动，不经过主机的许可证检查）。关闭：使用主机自带的 AMPR。',
+    ngFolderHint: '如果游戏在 ampr-emu-ng 通知后立即关闭，请关闭。',
     discTitle: '从光盘启动', discText: '零售版副本：只能在主机中放入光盘后从主屏幕启动。Kraken Mount 无法启动它。',
     szGame: '游戏', szDlc: 'DLC', szSave: '存档', szCache: '缓存',
     szPart: '{part} {size}', szNa: '{part} 不可用', szTotal: '总计 {size}',
@@ -1881,6 +1902,7 @@ var MSG = {
     gNotify: '通知与日志', gMaint: '维护', expandMenu: '展开菜单', collapseMenu: '收起菜单',
     hideTitle: '隐藏 {name}？', hideText: '它将从主屏幕和游戏库中移除。其文件仍保留在 {path}；可在“已隐藏”页面取消隐藏。',
     backportsTab: '向下移植', bpDeleteAll: '全部删除', bpNone: '未找到向下移植。',
+    imagesTab: '镜像', imHint: '扫描文件夹中的镜像文件（{ext}）。每个镜像在挂载前都会先被读取；包含游戏的镜像以只读方式挂载，游戏会出现在游戏库中。', imNone: '扫描文件夹中未找到镜像文件。', imMounted: '已挂载', imCopying: '正在复制', imDetails: '详情',
     bpHint: '扫描根目录中 {dir} 下的文件夹会在启动时替换游戏文件。',
     bpOff: '设置中已关闭向下移植：以下内容均不会应用。',
     bpApplied: '已应用', bpPending: '下次构建时应用', bpOffState: '已关闭',
@@ -1977,6 +1999,7 @@ var MSG = {
     playgoStub: 'PlayGo-Stub', playgoHint: 'Ausschalten, wenn das Spiel auf einem schwarzen Bildschirm bleibt; einschalten, wenn es verlangt, den Download abzuschließen.',
     overlayLbl: 'Kraken Mount-Bibliotheken', overlayHint: 'Nur für Apps ausschalten, die eigene Systembibliotheken mitbringen (Playden-Titel): Das Spiel läuft dann ohne ampr-emu-ng und die mitgelieferten Emulatoren.',
     ngLbl: 'ampr-emu-ng', ngHint: 'An: Das Spiel läuft über ampr-emu-ng (eine installierte Debug-FPKG startet aus ihrer app.pkg, ohne die Lizenzprüfung der Konsole). Aus: das AMPR der Konsole.',
+    ngFolderHint: 'Ausschalten, wenn sich das Spiel direkt nach dem ampr-emu-ng-Hinweis schließt.',
     discTitle: 'Von der Disc starten', discText: 'Retail-Kopie: Sie startet nur mit eingelegter Disc vom Startbildschirm. Kraken Mount kann sie nicht starten.',
     szGame: 'Spiel', szDlc: 'DLC', szSave: 'Spielstand', szCache: 'Cache',
     szPart: '{part} {size}', szNa: '{part} k. A.', szTotal: 'Gesamt {size}',
@@ -2041,6 +2064,7 @@ var MSG = {
     gNotify: 'Benachrichtigungen & Protokoll', gMaint: 'Wartung', expandMenu: 'Menü ausklappen', collapseMenu: 'Menü einklappen',
     hideTitle: '{name} ausblenden?', hideText: 'Es verschwindet vom Startbildschirm und aus der Bibliothek. Seine Dateien bleiben unter {path}; einblenden können Sie es im Bereich Ausgeblendet.',
     backportsTab: 'Backports', bpDeleteAll: 'Alle löschen', bpNone: 'Keine Backports gefunden.',
+    imagesTab: 'Images', imHint: 'Image-Dateien ({ext}) in den Scan-Ordnern. Jede wird vor dem Einhängen gelesen; eine mit einem Spiel wird schreibgeschützt eingehängt, und das Spiel erscheint in der Bibliothek.', imNone: 'Keine Image-Dateien in den Scan-Ordnern gefunden.', imMounted: 'Eingehängt', imCopying: 'Wird kopiert', imDetails: 'Details',
     bpHint: 'Ordner in {dir} eines Scan-Stammverzeichnisses ersetzen beim Start die Dateien des Spiels.',
     bpOff: 'Backports sind in den Einstellungen aus: keiner davon wird angewendet.',
     bpApplied: 'Angewendet', bpPending: 'Wird beim nächsten Erstellen angewendet', bpOffState: 'Aus',
@@ -2137,6 +2161,7 @@ var MSG = {
     playgoStub: 'Stub de PlayGo', playgoHint: 'Desactívalo si el juego se queda en pantalla negra; actívalo si pide terminar la descarga.',
     overlayLbl: 'Bibliotecas de Kraken Mount', overlayHint: 'Desactívalo solo para apps que traen sus propias bibliotecas del sistema (títulos de Playden): el juego se ejecuta entonces sin ampr-emu-ng ni los emuladores incluidos.',
     ngLbl: 'ampr-emu-ng', ngHint: 'Activado: el juego se ejecuta con ampr-emu-ng (un FPKG de depuración instalado arranca desde su app.pkg, sin la comprobación de licencia de la consola). Desactivado: el AMPR de la propia consola.',
+    ngFolderHint: 'Desactívalo si el juego se cierra justo después del aviso de ampr-emu-ng.',
     discTitle: 'Inicia desde el disco', discText: 'Copia retail: solo arranca con su disco en la consola, desde la pantalla de inicio. Kraken Mount no puede iniciarla.',
     szGame: 'Juego', szDlc: 'DLC', szSave: 'Partidas', szCache: 'Caché',
     szPart: '{part} {size}', szNa: '{part} n/d', szTotal: 'Total {size}',
@@ -2201,6 +2226,7 @@ var MSG = {
     gNotify: 'Notificaciones y registro', gMaint: 'Mantenimiento', expandMenu: 'Expandir menú', collapseMenu: 'Contraer menú',
     hideTitle: '¿Ocultar {name}?', hideText: 'Sale de la pantalla de inicio y de la biblioteca. Sus archivos siguen en {path}; puedes mostrarlo de nuevo en la pantalla Ocultos.',
     backportsTab: 'Backports', bpDeleteAll: 'Eliminar todos', bpNone: 'No se encontraron backports.',
+    imagesTab: 'Imágenes', imHint: 'Archivos de imagen ({ext}) en las carpetas de escaneo. Cada uno se lee antes de montarlo; el que contiene un juego se monta en solo lectura y el juego aparece en la biblioteca.', imNone: 'No se encontraron archivos de imagen en las carpetas de escaneo.', imMounted: 'Montada', imCopying: 'Copiándose', imDetails: 'Detalles',
     bpHint: 'Las carpetas de {dir} en una raíz de escaneo reemplazan los archivos del juego al iniciarlo.',
     bpOff: 'Los backports están desactivados en Ajustes: no se aplica ninguno.',
     bpApplied: 'Aplicado', bpPending: 'Se aplica en la próxima creación', bpOffState: 'Desactivado',
@@ -2297,6 +2323,7 @@ var MSG = {
     playgoStub: 'Stub PlayGo', playgoHint: "Désactivez-le si le jeu reste sur un écran noir ; activez-le s'il demande de terminer le téléchargement.",
     overlayLbl: 'Bibliothèques Kraken Mount', overlayHint: "Désactivez-les uniquement pour les apps qui apportent leurs propres bibliothèques système (titres Playden) : le jeu tourne alors sans ampr-emu-ng ni les émulateurs fournis.",
     ngLbl: 'ampr-emu-ng', ngHint: 'Activé : le jeu passe par ampr-emu-ng (un FPKG de débogage installé démarre depuis son app.pkg, sans la vérification de licence de la console). Désactivé : l\'AMPR de la console.',
+    ngFolderHint: 'Désactivez-le si le jeu se ferme juste après la notification ampr-emu-ng.',
     discTitle: 'Lancer depuis le disque', discText: 'Copie retail : elle ne démarre qu\'avec son disque dans la console, depuis l\'écran d\'accueil. Kraken Mount ne peut pas la lancer.',
     szGame: 'Jeu', szDlc: 'DLC', szSave: 'Sauvegarde', szCache: 'Cache',
     szPart: '{part} {size}', szNa: '{part} n/d', szTotal: 'Total {size}',
@@ -2361,6 +2388,7 @@ var MSG = {
     gNotify: 'Notifications et journal', gMaint: 'Maintenance', expandMenu: 'Déplier le menu', collapseMenu: 'Replier le menu',
     hideTitle: 'Masquer {name} ?', hideText: 'Il quitte l\'écran d\'accueil et la bibliothèque. Ses fichiers restent dans {path} ; réaffichez-le depuis l\'écran Masqués.',
     backportsTab: 'Backports', bpDeleteAll: 'Tout supprimer', bpNone: 'Aucun backport trouvé.',
+    imagesTab: 'Images', imHint: 'Fichiers image ({ext}) des dossiers analysés. Chacun est lu avant d\'être monté ; celui qui contient un jeu est monté en lecture seule et le jeu apparaît dans la bibliothèque.', imNone: 'Aucun fichier image trouvé dans les dossiers analysés.', imMounted: 'Montée', imCopying: 'Copie en cours', imDetails: 'Détails',
     bpHint: 'Les dossiers de {dir} d\'une racine d\'analyse remplacent les fichiers du jeu au lancement.',
     bpOff: 'Les backports sont désactivés dans les Paramètres : aucun n\'est appliqué.',
     bpApplied: 'Appliqué', bpPending: 'Appliqué à la prochaine création', bpOffState: 'Désactivé',
@@ -2457,6 +2485,7 @@ var MSG = {
     playgoStub: 'PlayGo スタブ', playgoHint: 'ゲームが黒い画面のままならオフに、ダウンロードの完了を求められたらオンにします。',
     overlayLbl: 'Kraken Mount のライブラリ', overlayHint: '独自のシステムライブラリを持つアプリ（Playden のタイトル）の場合のみオフにします。オフにするとゲームは ampr-emu-ng と同梱のエミュレーターなしで動作します。',
     ngLbl: 'ampr-emu-ng', ngHint: 'オン：ゲームは ampr-emu-ng で動作します（インストール済みのデバッグ FPKG は本体のライセンス確認なしに app.pkg から起動します）。オフ：本体の AMPR を使います。',
+    ngFolderHint: 'ampr-emu-ng の通知の直後にゲームが終了する場合はオフにします。',
     discTitle: 'ディスクから起動', discText: '製品版のコピーです。ディスクを本体に入れた状態でホーム画面からのみ起動できます。Kraken Mount からは起動できません。',
     szGame: 'ゲーム', szDlc: 'DLC', szSave: 'セーブ', szCache: 'キャッシュ',
     szPart: '{part} {size}', szNa: '{part} 不明', szTotal: '合計 {size}',
@@ -2521,6 +2550,7 @@ var MSG = {
     gNotify: '通知とログ', gMaint: 'メンテナンス', expandMenu: 'メニューを展開', collapseMenu: 'メニューを折りたたむ',
     hideTitle: '{name} を非表示にしますか？', hideText: 'ホーム画面とライブラリから外れます。ファイルは {path} に残ります。「非表示」画面から再表示できます。',
     backportsTab: 'バックポート', bpDeleteAll: 'すべて削除', bpNone: 'バックポートが見つかりません。',
+    imagesTab: 'イメージ', imHint: 'スキャンフォルダー内のイメージファイル（{ext}）。マウントする前にそれぞれを読み取り、ゲームを含むものは読み取り専用でマウントされ、ゲームがライブラリに表示されます。', imNone: 'スキャンフォルダーにイメージファイルが見つかりません。', imMounted: 'マウント済み', imCopying: 'コピー中', imDetails: '詳細',
     bpHint: 'スキャンルートの {dir} にあるフォルダーが、起動時にゲームのファイルを置き換えます。',
     bpOff: '設定でバックポートがオフになっています: どれも適用されません。',
     bpApplied: '適用済み', bpPending: '次回の作成時に適用', bpOffState: 'オフ',
@@ -2617,6 +2647,7 @@ var MSG = {
     playgoStub: 'Stub do PlayGo', playgoHint: 'Desligue se o jogo ficar na tela preta; ligue se ele pedir para concluir o download.',
     overlayLbl: 'Bibliotecas do Kraken Mount', overlayHint: 'Desligue só para apps que trazem as próprias bibliotecas do sistema (títulos do Playden): o jogo então roda sem o ampr-emu-ng e os emuladores incluídos.',
     ngLbl: 'ampr-emu-ng', ngHint: 'Ligado: o jogo roda pelo ampr-emu-ng (um FPKG de depuração instalado inicia a partir do seu app.pkg, sem a verificação de licença do console). Desligado: o AMPR do próprio console.',
+    ngFolderHint: 'Desligue se o jogo fechar logo após o aviso do ampr-emu-ng.',
     discTitle: 'Inicie pelo disco', discText: 'Cópia retail: só inicia com o disco no console, pela tela inicial. O Kraken Mount não consegue iniciá-la.',
     szGame: 'Jogo', szDlc: 'DLC', szSave: 'Salvamento', szCache: 'Cache',
     szPart: '{part} {size}', szNa: '{part} n/d', szTotal: 'Total {size}',
@@ -2681,6 +2712,7 @@ var MSG = {
     gNotify: 'Notificações e log', gMaint: 'Manutenção', expandMenu: 'Expandir menu', collapseMenu: 'Recolher menu',
     hideTitle: 'Ocultar {name}?', hideText: 'Ele sai da tela inicial e da biblioteca. Os arquivos continuam em {path}; reexiba-o na tela Ocultos.',
     backportsTab: 'Backports', bpDeleteAll: 'Excluir todos', bpNone: 'Nenhum backport encontrado.',
+    imagesTab: 'Imagens', imHint: 'Arquivos de imagem ({ext}) nas pastas de varredura. Cada um é lido antes de ser montado; o que contém um jogo é montado somente leitura e o jogo aparece na biblioteca.', imNone: 'Nenhum arquivo de imagem encontrado nas pastas de varredura.', imMounted: 'Montada', imCopying: 'Sendo copiada', imDetails: 'Detalhes',
     bpHint: 'Pastas em {dir} de uma raiz de escaneamento substituem os arquivos do jogo ao iniciar.',
     bpOff: 'Os backports estão desativados nas Configurações: nenhum deles é aplicado.',
     bpApplied: 'Aplicado', bpPending: 'Aplicado na próxima criação', bpOffState: 'Desativado',
@@ -2777,6 +2809,7 @@ var MSG = {
     playgoStub: 'Stub PlayGo', playgoHint: 'Disattivalo se il gioco resta su schermo nero; attivalo se chiede di completare il download.',
     overlayLbl: 'Librerie di Kraken Mount', overlayHint: 'Disattivale solo per le app che portano le proprie librerie di sistema (titoli Playden): il gioco gira allora senza ampr-emu-ng e gli emulatori inclusi.',
     ngLbl: 'ampr-emu-ng', ngHint: 'Attivo: il gioco usa ampr-emu-ng (un FPKG di debug installato si avvia dal suo app.pkg, senza il controllo della licenza della console). Disattivo: l\'AMPR della console.',
+    ngFolderHint: 'Disattivalo se il gioco si chiude subito dopo l\'avviso di ampr-emu-ng.',
     discTitle: 'Avvia dal disco', discText: 'Copia retail: si avvia solo con il disco nella console, dalla schermata Home. Kraken Mount non può avviarla.',
     szGame: 'Gioco', szDlc: 'DLC', szSave: 'Salvataggi', szCache: 'Cache',
     szPart: '{part} {size}', szNa: '{part} n/d', szTotal: 'Totale {size}',
@@ -2841,6 +2874,7 @@ var MSG = {
     gNotify: 'Notifiche e registro', gMaint: 'Manutenzione', expandMenu: 'Espandi menu', collapseMenu: 'Comprimi menu',
     hideTitle: 'Nascondere {name}?', hideText: 'Esce dalla schermata Home e dalla libreria. I suoi file restano in {path}; puoi mostrarlo di nuovo dalla schermata Nascosti.',
     backportsTab: 'Backport', bpDeleteAll: 'Elimina tutti', bpNone: 'Nessun backport trovato.',
+    imagesTab: 'Immagini', imHint: 'File immagine ({ext}) nelle cartelle di scansione. Ognuno viene letto prima di essere montato; quello che contiene un gioco viene montato in sola lettura e il gioco compare nella libreria.', imNone: 'Nessun file immagine trovato nelle cartelle di scansione.', imMounted: 'Montata', imCopying: 'In copia', imDetails: 'Dettagli',
     bpHint: 'Le cartelle in {dir} di una radice di scansione sostituiscono i file del gioco all\'avvio.',
     bpOff: 'I backport sono disattivati nelle Impostazioni: nessuno viene applicato.',
     bpApplied: 'Applicato', bpPending: 'Si applica alla prossima creazione', bpOffState: 'Disattivato',
@@ -2937,6 +2971,7 @@ var MSG = {
     playgoStub: 'PlayGo 스텁', playgoHint: '게임이 검은 화면에서 멈추면 끄고, 다운로드를 완료하라고 하면 켜세요.',
     overlayLbl: 'Kraken Mount 라이브러리', overlayHint: '자체 시스템 라이브러리를 포함한 앱(Playden 타이틀)에서만 끄세요. 끄면 게임이 ampr-emu-ng와 내장 에뮬레이터 없이 실행됩니다.',
     ngLbl: 'ampr-emu-ng', ngHint: '켜면 게임이 ampr-emu-ng로 실행됩니다(설치된 디버그 FPKG는 콘솔의 라이선스 확인 없이 app.pkg에서 시작). 끄면 콘솔 자체 AMPR을 사용합니다.',
+    ngFolderHint: 'ampr-emu-ng 알림 직후 게임이 종료되면 끄세요.',
     discTitle: '디스크로 실행', discText: '정식판 사본: 콘솔에 디스크를 넣은 상태에서 홈 화면으로만 실행됩니다. Kraken Mount로는 실행할 수 없습니다.',
     szGame: '게임', szDlc: 'DLC', szSave: '세이브', szCache: '캐시',
     szPart: '{part} {size}', szNa: '{part} 해당 없음', szTotal: '합계 {size}',
@@ -3001,6 +3036,7 @@ var MSG = {
     gNotify: '알림 및 로그', gMaint: '유지 관리', expandMenu: '메뉴 펼치기', collapseMenu: '메뉴 접기',
     hideTitle: '{name}을(를) 숨길까요?', hideText: '홈 화면과 라이브러리에서 빠집니다. 파일은 {path}에 남아 있으며, 숨김 화면에서 숨김 해제할 수 있습니다.',
     backportsTab: '백포트', bpDeleteAll: '모두 삭제', bpNone: '백포트를 찾을 수 없습니다.',
+    imagesTab: '이미지', imHint: '스캔 폴더의 이미지 파일({ext})입니다. 각 파일은 마운트하기 전에 먼저 읽히며, 게임이 들어 있는 파일은 읽기 전용으로 마운트되어 게임이 라이브러리에 나타납니다.', imNone: '스캔 폴더에 이미지 파일이 없습니다.', imMounted: '마운트됨', imCopying: '복사 중', imDetails: '자세히',
     bpHint: '스캔 루트의 {dir} 폴더가 실행 시 게임 파일을 대체합니다.',
     bpOff: '설정에서 백포트가 꺼져 있어 아무것도 적용되지 않습니다.',
     bpApplied: '적용됨', bpPending: '다음 생성 시 적용', bpOffState: '꺼짐',
@@ -3097,6 +3133,7 @@ var MSG = {
     playgoStub: 'بديل PlayGo', playgoHint: 'أوقفه إذا بقيت اللعبة على شاشة سوداء، وشغّله إذا طلبت إكمال التنزيل.',
     overlayLbl: 'مكتبات Kraken Mount', overlayHint: 'أوقفها فقط للتطبيقات التي تأتي بمكتبات النظام الخاصة بها (عناوين Playden): عندها تعمل اللعبة بدون ampr-emu-ng والمحاكيات المرفقة.',
     ngLbl: 'ampr-emu-ng', ngHint: 'عند التشغيل: تعمل اللعبة عبر ampr-emu-ng (تبدأ حزمة FPKG التجريبية المثبّتة من ملف app.pkg الخاص بها دون فحص ترخيص الجهاز). عند الإيقاف: نظام AMPR الخاص بالجهاز.',
+    ngFolderHint: 'أوقفه إذا أُغلقت اللعبة مباشرةً بعد إشعار ampr-emu-ng.',
     discTitle: 'شغّلها من القرص', discText: 'نسخة تجارية: لا تعمل إلا وقرصها في الجهاز، من الشاشة الرئيسية. لا يستطيع Kraken Mount تشغيلها.',
     szGame: 'اللعبة', szDlc: 'DLC', szSave: 'الحفظ', szCache: 'الذاكرة المؤقتة',
     szPart: '{part} {size}', szNa: '{part} غير متاح', szTotal: 'الإجمالي {size}',
@@ -3161,6 +3198,7 @@ var MSG = {
     gNotify: 'الإشعارات والسجل', gMaint: 'الصيانة', expandMenu: 'توسيع القائمة', collapseMenu: 'طي القائمة',
     hideTitle: 'إخفاء {name}؟', hideText: 'ستختفي من الشاشة الرئيسية والمكتبة. تبقى ملفاتها في {path}؛ أظهرها من قسم المخفية.',
     backportsTab: 'الباكبورت', bpDeleteAll: 'حذف الكل', bpNone: 'لم يُعثر على باكبورت.',
+    imagesTab: 'الصور', imHint: 'ملفات الصور ({ext}) في مجلدات الفحص. يُقرأ كل ملف قبل تركيبه؛ والملف الذي يحتوي على لعبة يُركَّب للقراءة فقط وتظهر اللعبة في المكتبة.', imNone: 'لم يُعثر على ملفات صور في مجلدات الفحص.', imMounted: 'مُركَّبة', imCopying: 'جارٍ النسخ', imDetails: 'التفاصيل',
     bpHint: 'تستبدل المجلدات في {dir} ضمن جذر المسح ملفات اللعبة عند التشغيل.',
     bpOff: 'الباكبورت متوقف في الإعدادات: لا يُطبَّق أي منها.',
     bpApplied: 'مُطبَّق', bpPending: 'يُطبَّق في الإنشاء التالي', bpOffState: 'متوقف',
@@ -3403,7 +3441,13 @@ function gameKind(g) {
   if (g.packing === 'lz4' || g.packing === 'zstd') return g.packing;
   return 'folder';
 }
-function badgeText(g) { return { pkg: 'PKG', installed: t('badgeInstalled'), folder: t('badgeFolder'), lz4: 'LZ4', zstd: 'ZSTD' }[gameKind(g)]; }
+// An image game's badge is its format (EXFAT, FFPKG, FFPFS, FFPFSC).
+function badgeText(g) {
+  if (g.image) return imageFormat(g.image);
+  return { pkg: 'PKG', installed: t('badgeInstalled'), folder: t('badgeFolder'), lz4: 'LZ4', zstd: 'ZSTD' }[gameKind(g)];
+}
+// An image file's format from its name: EXFAT, FFPKG, FFPFS or FFPFSC.
+function imageFormat(path) { return (String(path).split('.').pop() || '').toUpperCase(); }
 function gameName(g) { return g.title_name || g.title_id; }
 // Lower case without accents, so "pokemon" finds "Pokémon".
 function fold(s) {
@@ -3650,6 +3694,46 @@ function renderBackports(games) {
   $('bpempty').hidden = !!list.length;
   $('bpall').hidden = list.length < 2;
   $('bpoff').classList.toggle('show', off && !!list.length);
+}
+// Images screen: each image file of the last scan (state.images), its game, state and Details.
+function renderImages(images, games) {
+  var list = Array.isArray(images) ? images : [], box = $('imlist');
+  var key = list.map(function (m) { return m.path + '|' + m.state + '|' + (m.title_id || ''); }).join(';');
+  if (box.getAttribute('data-key') !== key) {
+    var hadFocus = $('images').contains(document.activeElement);
+    box.setAttribute('data-key', key);
+    box.textContent = '';
+    list.forEach(function (m) {
+      var row = el('div', 'bprow'), name = el('div', 'bpname'), btn = el('button', 'small');
+      name.appendChild(el('b'));
+      name.appendChild(el('span'));
+      btn.type = 'button';
+      btn.onclick = function () { if (m.title_id && findGame(m.title_id)) openModal(m.title_id, btn); };
+      row.appendChild(name); row.appendChild(el('span', 'hdkind')); row.appendChild(el('code'));
+      row.appendChild(el('span', 'bpstate')); row.appendChild(btn); row.appendChild(el('div', 'imerr'));
+      box.appendChild(row);
+    });
+    if (hadFocus) { var first = driveButtons('images')[0]; if (first) first.focus(); else focusRail(); }
+  }
+  list.forEach(function (m, i) {
+    var r = box.children[i].children, file = String(m.path).split('/').pop();
+    var g = m.title_id ? (games || []).filter(function (x) {
+      return x && x.title_id === m.title_id && x.image === m.path;
+    })[0] : null;
+    var dup = !!g && g.status === 'duplicate';
+    setText(r[0].children[0], g ? gameName(g) : file);
+    setText(r[0].children[1], (g ? gameSub(g) + ' · ' : m.title_id ? m.title_id + ' · ' : '') + fmtSize(m.size));
+    setText(r[1], imageFormat(m.path));
+    setText(r[2], m.path);
+    r[3].className = 'bpstate' + (m.state === 'game' && !dup ? ' on' : m.state === 'error' ? ' err' : '');
+    setText(r[3], t(m.state === 'error' ? 'stError' : m.state === 'copying' ? 'imCopying' : dup ? 'stDuplicate' : 'imMounted'));
+    r[4].hidden = !g || dup;
+    setText(r[4], t('imDetails'));
+    r[4].setAttribute('aria-label', t('imDetails') + ' ' + (g ? gameName(g) : file));
+    r[5].hidden = !m.error;
+    setText(r[5], m.error || '');
+  });
+  $('imempty').hidden = !!list.length;
 }
 // Hidden screen: games hidden from the home screen (their path is in `exclude`), with Unhide.
 function renderHidden(list) {
@@ -4216,9 +4300,12 @@ function renderModal() {
   $('m-playgo-row').hidden = retail || !(g.playgo === true || g.playgo_off) || (g.kind !== 'pkg' && !!g.overlay_off);
   if (!pg._busy) pg.checked = !g.playgo_off;
   pg.disabled = !!pg._busy || g.status === 'duplicate' || g.status === 'building';
-  // The ampr-emu-ng switch: installed games (ng_off is null on the others).
-  var ng = $('m-ng');
-  $('m-ng-row').hidden = retail || g.ng_off == null;
+  // The ampr-emu-ng switch: installed games and plain folders with inject_ampr (ng_off is null on
+  // the others: zstd/LZ4 folders and pkg games cannot start without it). A folder with its overlay off
+  // gets no ampr-emu-ng anyway.
+  var ng = $('m-ng'), ngHint = $('m-ng-hint'), ngKey = g.kind === 'folder' ? 'ngFolderHint' : 'ngHint';
+  $('m-ng-row').hidden = retail || g.ng_off == null || (g.kind === 'folder' && !!g.overlay_off);
+  if (ngHint.getAttribute('data-i18n') !== ngKey) { ngHint.setAttribute('data-i18n', ngKey); setText(ngHint, t(ngKey)); }
   if (!ng._busy) ng.checked = !g.ng_off;
   ng.disabled = !!ng._busy || g.status === 'duplicate' || g.status === 'building';
   // The overlay switch: folder and installed games (a pkg needs ampr-emu-ng's pkg mode, also an
@@ -4505,6 +4592,7 @@ async function poll() {
     renderChips(games);
     renderStorage(state.drives);
     renderBackports(games);
+    renderImages(state.images, games);
     renderHidden(hiddenList);
     renderGrid(games);
     if (modalOpen()) renderModal();
@@ -4915,6 +5003,7 @@ function enterContent() {
 function enterView() {
   if (!$('drives').hidden) { if (driveButtons()[0]) driveButtons()[0].focus(); }
   else if (!$('backports').hidden) { if (driveButtons('backports')[0]) driveButtons('backports')[0].focus(); }
+  else if (!$('images').hidden) { if (driveButtons('images')[0]) driveButtons('images')[0].focus(); }
   else if (!$('hiddengames').hidden) { if (driveButtons('hiddengames')[0]) driveButtons('hiddengames')[0].focus(); }
   else if (!$('install').hidden) { if (driveButtons('install')[0]) driveButtons('install')[0].focus(); }
   else if ($('library').hidden) fields()[0].focus(); else focusChip();
@@ -4962,7 +5051,7 @@ function moveInSettings(t, key) {
   else if (key === 'ArrowUp' && bannerButtons().length) bannerButtons()[0].focus();
   return true;
 }
-// The game sheet's controls in page order: its enabled buttons and the switches (PlayGo, overlay) when shown.
+// The game sheet's controls in page order: its enabled buttons and the switches (PlayGo, overlay, ampr-emu-ng) when shown.
 function modalControls() {
   return Array.prototype.slice.call(document.querySelectorAll('#modal button:not([disabled]), #modal input:not([disabled])'))
     .filter(function (c) { return !c.hidden && (c.tagName !== 'INPUT' || !c.parentNode.hidden); });
@@ -5021,6 +5110,7 @@ document.addEventListener('keydown', function (e) {
   if ($('settings').contains(t)) { if (moveInSettings(t, k)) e.preventDefault(); return; }
   if ($('drives').contains(t)) { e.preventDefault(); moveInDrives(t, k); return; }
   if ($('backports').contains(t)) { e.preventDefault(); moveInDrives(t, k, 'backports'); return; }
+  if ($('images').contains(t)) { e.preventDefault(); moveInDrives(t, k, 'images'); return; }
   if ($('hiddengames').contains(t)) { e.preventDefault(); moveInDrives(t, k, 'hiddengames'); return; }
   if ($('install').contains(t)) { e.preventDefault(); moveInDrives(t, k, 'install'); return; }
   if (t === $('q')) {
@@ -5058,6 +5148,7 @@ function renderAll() {
     renderChips(games);
     renderStorage(state.drives);
     renderBackports(games);
+    renderImages(state.images, games);
     renderHidden(hiddenList);
     renderInstall();
     renderGrid(games);

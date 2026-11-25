@@ -28,11 +28,24 @@ pub struct Game {
     pub cache_built: Option<u64>,
 }
 
+/// One `.exfat`/`.ffpkg`/`.ffpfs`/`.ffpfsc` file of the last scan.
+#[derive(Clone)]
+pub struct ImageRow {
+    pub path: PathBuf,
+    pub size: u64,
+    /// "game" (mounted, a library source or a duplicate), "copying" (stability wait) or "error".
+    pub state: &'static str,
+    pub title_id: Option<String>,
+    pub error: Option<String>,
+}
+
 pub struct State {
     /// The last scan: library games first, then duplicates.
     pub games: Mutex<Vec<Game>>,
     /// The last scan's patch and DLC packages (the Install screen).
     pub packages: Mutex<Vec<Package>>,
+    /// The last scan's image files (the Images screen): `main::publish`.
+    pub images: Mutex<Vec<ImageRow>>,
     pub settings: Mutex<Settings>,
     /// Title ids to rebuild on the next scan.
     pub forced: Mutex<HashSet<String>>,
@@ -58,6 +71,7 @@ impl State {
         State {
             games: Mutex::new(Vec::new()),
             packages: Mutex::new(Vec::new()),
+            images: Mutex::new(Vec::new()),
             settings: Mutex::new(settings),
             forced: Mutex::new(HashSet::new()),
             purge: AtomicBool::new(false),
@@ -122,6 +136,7 @@ fn game_json(g: &Game, playgo_off: Option<&[String]>, crash: Option<&crate::cras
         "path": g.src.path.to_string_lossy(),
         "kind": kind,
         "packing": packing,
+        "image": g.src.image.as_ref().map(|i| i.to_string_lossy()),
         "drive": g.src.drive,
         "size": g.src.size,
         "status": g.status,
@@ -692,6 +707,9 @@ fn post_settings(state: &State, body: &[u8]) -> Reply {
     if v.get("ampr_installed_off").is_none() {
         s.ampr_installed_off.clone_from(&file.ampr_installed_off);
     }
+    if v.get("ampr_off").is_none() {
+        s.ampr_off.clone_from(&file.ampr_off);
+    }
     let sent_overlay = v.get("overlay_off").is_some();
     if !sent_overlay {
         s.overlay_off.clone_from(&file.overlay_off);
@@ -749,8 +767,10 @@ fn post_playgo(state: &State, tid: &str, body: &[u8]) -> Reply {
     no_content()
 }
 
-/// POST /api/ng/<TID>, body `on` or `off`: ampr-emu-ng for one installed game. The value of the
-/// global `ampr_installed` clears the title's override (it follows the global switch again).
+/// POST /api/ng/<TID>, body `on` or `off`: ampr-emu-ng for one installed game or one plain folder game.
+/// Installed: the value of the global `ampr_installed` clears the title's override (it follows the
+/// global switch again). Plain folder: `off` puts the title in `ampr_off`, `on` takes it out; refused
+/// while `inject_ampr` is off (no folder gets ampr-emu-ng then). zstd/LZ4 folders and pkg games: 409.
 fn post_ng(state: &State, tid: &str, body: &[u8]) -> Reply {
     let Some(src) = Some(tid).filter(|t| crate::scan::valid_tid(t)).and_then(|t| state.source(t)) else {
         return not_found();
@@ -760,8 +780,22 @@ fn post_ng(state: &State, tid: &str, body: &[u8]) -> Reply {
         b"off" => false,
         _ => return reply(400, "text/plain", "expected on or off"),
     };
+    if src.kind == Kind::Folder(Packing::Plain) {
+        if !state.settings.lock().unwrap().inject_ampr {
+            return reply(409, "text/plain", "inject_ampr is off: no folder game gets ampr-emu-ng");
+        }
+        return match change_settings(state, &format!("{tid}: ampr-emu-ng"), |s| set_member(&mut s.ampr_off, tid, !on)) {
+            Ok(changed) => {
+                if changed {
+                    log!("{tid}: ampr-emu-ng {}", if on { "on" } else { "off" });
+                }
+                no_content()
+            }
+            Err(e) => reply(500, "text/plain", e.to_string()),
+        };
+    }
     if src.kind != Kind::Installed && !crate::scan::installed_pkg(&src) {
-        return reply(409, "text/plain", "not an installed game");
+        return reply(409, "text/plain", "not an installed game or a plain folder game");
     }
     let r = change_settings(state, &format!("{tid}: ampr-emu-ng"), |s| {
         let differs = on != s.ampr_installed;
@@ -871,7 +905,10 @@ fn report_text(g: &Game, s: &Settings, ampr: &serde_json::Value, crash: Option<&
         Kind::Folder(Packing::Lz4) => "folder (lz4)",
         Kind::Installed => "installed",
     };
-    let ampr = format!("{} {}", ampr["kind"].as_str().unwrap_or("?"), ampr["version"].as_str().unwrap_or("")).trim_end().to_string();
+    let mut ampr = format!("{} {}", ampr["kind"].as_str().unwrap_or("?"), ampr["version"].as_str().unwrap_or("")).trim_end().to_string();
+    if src.kind == Kind::Folder(Packing::Plain) && !s.ng_folder(&src.title_id) && s.inject_ampr {
+        ampr += " (off for this game: ampr_off)";
+    }
     let playgo = if !s.add_emulators { "not added (add_emulators off)" }
         else if s.playgo_off.iter().any(|t| *t == src.title_id) { "off" } else { "on" };
     let crash = crash.map_or("none recorded".to_string(), |c| {
@@ -883,6 +920,9 @@ fn report_text(g: &Game, s: &Settings, ampr: &serde_json::Value, crash: Option<&
         env!("CARGO_PKG_VERSION"), src.title_name, src.title_id, src.version, src.path.display(), src.drive,
         g.status, g.error.as_deref().map_or(String::new(), |e| format!(" ({e})")),
     );
+    if let Some(image) = &src.image {
+        out += &format!("Image: {}\n", image.display());
+    }
     let lines: Vec<&str> = log.lines().filter(|l| l.contains(src.title_id.as_str())).collect();
     out += &format!("\nkraken.log, last {} lines with {}:\n", REPORT_LOG_LINES, src.title_id);
     for l in &lines[lines.len().saturating_sub(REPORT_LOG_LINES)..] {
@@ -913,9 +953,16 @@ fn api_state(state: &State) -> Vec<u8> {
         // The title has an installed copy (that row itself, or a Kraken source it beat).
         let have = installed.get(g.src.title_id.as_str());
         v["installed"] = have.is_some().into();
-        // The game sheet's ampr-emu-ng switch: installed rows only (null on the others).
+        // The game sheet's ampr-emu-ng switch: installed rows and plain folders (null on the others).
         let installed_row = g.src.kind == Kind::Installed || crate::scan::installed_pkg(&g.src);
-        v["ng_off"] = installed_row.then(|| !settings.ng_installed(&g.src.title_id)).into();
+        v["ng_off"] = if installed_row {
+            Some(!settings.ng_installed(&g.src.title_id))
+        } else if g.src.kind == Kind::Folder(Packing::Plain) && settings.inject_ampr {
+            // A plain folder (ampr_off); zstd/LZ4 folders cannot start without it: no switch.
+            Some(!settings.ng_folder(&g.src.title_id))
+        } else {
+            None
+        }.into();
         v["installed_version"] = have.map(|h| h.0).into();
         // Only the installed row: the Retail badge is the install's, not a .pkg's.
         v["retail"] = (g.src.kind == Kind::Installed && have.is_some_and(|h| h.1)).into();
@@ -948,6 +995,13 @@ fn api_state(state: &State) -> Vec<u8> {
         "waiting": *state.waiting.lock().unwrap(),
         "running": running,
         "games": games,
+        "images": state.images.lock().unwrap().iter().map(|i| serde_json::json!({
+            "path": i.path.to_string_lossy(),
+            "size": i.size,
+            "state": i.state,
+            "title_id": i.title_id,
+            "error": i.error,
+        })).collect::<Vec<_>>(),
         "install": install,
         "drives": drives,
         "cache": {
@@ -1163,7 +1217,7 @@ fn delete_source(state: &State, body: &[u8]) -> Reply {
         if settings.scan_paths.is_empty() { storage::default_scan_roots() } else { settings.scan_paths.clone() }
     };
     let src = Source { path: path.clone(), kind: Kind::Pkg, title_id: tid.clone(), title_name: String::new(),
-        version: String::new(), drive: String::new(), size: 0, backport: None };
+        version: String::new(), drive: String::new(), size: 0, backport: None, image: None };
     if let Err(reason) = safe_delete_source(&src, &roots) {
         log!("{tid}: delete of the installed .pkg {} rejected: {reason}", path.display());
         return reply(409, "text/plain", reason);
@@ -1213,6 +1267,7 @@ fn sizes(state: &State, tid: &str) -> Reply {
             log!("{tid}: stat {}: {e}", src.path.display());
             src.size
         }),
+        Kind::Folder(_) if src.image.is_some() => src.size,
         Kind::Folder(_) => cache::du(&src.path),
         // app.pkg's size, or the ext copy's du (installed::list).
         Kind::Installed => src.size,
@@ -1912,7 +1967,7 @@ extern "C" {
 
 /// (mount point, source, fsid) of every mount. getfsstat into our own buffer: ps5/compat.c's
 /// getmntinfo shares one static buffer with the launch watcher's thread.
-fn mount_table() -> std::io::Result<Vec<(String, String, u64)>> {
+pub(crate) fn mount_table() -> std::io::Result<Vec<(String, String, u64)>> {
     let mut extra = 8; // room for mounts added between the two calls
     for _ in 0..4 {
         let n = unsafe { libc::getfsstat(std::ptr::null_mut(), 0, libc::MNT_NOWAIT) };
@@ -2018,6 +2073,20 @@ fn eject(state: &State, body: &[u8]) -> Reply {
     for tid in tids {
         if let Err(e) = register::unmount_title(tid) {
             log!("eject {path}: {tid}: unmount: {e}");
+            drop(work);
+            state.wake();
+            return reply(409, "text/plain", e.to_string());
+        }
+    }
+    // Images on the drive (.exfat/.ffpkg/.ffpfs/.ffpfsc): inner images and titles, then the image
+    // mounts (they keep the drive busy).
+    let prefix = format!("{path}/");
+    for (mp, image) in crate::image::mounts() {
+        if !image.to_string_lossy().starts_with(&prefix) {
+            continue;
+        }
+        if let Err(e) = crate::image::release_tree(&mp, &mounts) {
+            log!("eject {path}: image {}: {e}", image.display());
             drop(work);
             state.wake();
             return reply(409, "text/plain", e.to_string());

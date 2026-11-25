@@ -8,6 +8,7 @@
 #[macro_use]
 mod sys;
 mod i18n;
+mod image;
 mod install;
 mod installed;
 mod ampr_index;
@@ -50,6 +51,7 @@ fn inputs_key(src: &Source, s: &Settings) -> String {
     k += &format!("|playgo_off={}", s.playgo_off.contains(&src.title_id));
     k += &format!("|overlay_off={}", s.overlay_off.contains(&src.title_id));
     k += &format!("|ng={}", s.ng_installed(&src.title_id));
+    k += &format!("|ampr_off={}", s.ampr_off.contains(&src.title_id));
     for p in cache::inputs(src, s) {
         let mtime = std::fs::metadata(&p).and_then(|m| m.modified()).ok();
         k += &format!("|{}={mtime:?}", p.display());
@@ -395,6 +397,21 @@ fn finish(
 /// keeps its old entry (it is not gone), a new one shows up once it is stable.
 fn publish(state: &State, r: &scan::ScanResult) {
     *state.packages.lock().unwrap() = r.packages.clone();
+    // The Images screen: every image file of this pass, sorted by path.
+    let size = |p: &std::path::Path| std::fs::metadata(p).map_or(0, |m| m.len());
+    let mut images: Vec<web::ImageRow> = r.games.iter().chain(&r.duplicates)
+        .filter_map(|g| g.image.as_ref().map(|i| web::ImageRow {
+            path: i.clone(), size: g.size, state: "game", title_id: Some(g.title_id.clone()), error: None,
+        }))
+        .chain(r.unstable.iter().filter(|(p, _)| image::is_image(p)).map(|(p, tid)| web::ImageRow {
+            path: p.clone(), size: size(p), state: "copying", title_id: tid.clone(), error: None,
+        }))
+        .chain(r.errors.iter().filter(|(p, _)| image::is_image(p)).map(|(p, e)| web::ImageRow {
+            path: p.clone(), size: size(p), state: "error", title_id: None, error: Some(e.clone()),
+        }))
+        .collect();
+    images.sort_by(|a, b| a.path.cmp(&b.path));
+    *state.images.lock().unwrap() = images;
     let mut games = state.games.lock().unwrap();
     let old = std::mem::take(&mut *games);
     for src in &r.games {
@@ -1031,6 +1048,17 @@ fn main() {
             state.forced.lock().unwrap().extend(keep);
         }
         publish(&state, &r);
+        // Image mounts no source of this scan uses (image deleted, moved or unplugged) are released
+        // before the games are processed, so a moved image's title sees its old folder gone (Moved).
+        // A scan error on a path inside a mount (an image found inside an image) keeps that mount too.
+        // A .ffpfsc game keeps both its container mount (image) and its inner mount (path).
+        let keep: HashSet<PathBuf> = r.games.iter().chain(&r.duplicates)
+            .flat_map(|g| [g.image.as_deref().map(image::mount_point), image::mount_of(&g.path)])
+            .flatten()
+            .chain(r.unstable.iter().map(|(p, _)| p.as_path()).filter(|p| image::is_image(p)).map(image::mount_point))
+            .chain(r.errors.iter().filter_map(|(p, _)| image::mount_of(p)))
+            .collect();
+        image::release_unused(&keep);
         // A source that left the scan (USB unplugged) goes through register::mount again when back.
         // A source still being copied stays registered (skipped this pass, not gone).
         registered.retain(|t| r.games.iter().any(|g| &g.title_id == t)

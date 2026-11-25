@@ -35,6 +35,10 @@ export CARGO_TARGET_X86_64_PS5_FREEBSD_RUSTFLAGS='--cfg libc_unstable_freebsd_ve
 export CARGO_TARGET_DIR="$out"
 export CARGO_TARGET_X86_64_PS5_FREEBSD_LINKER=/work/ps5/linker.sh
 export CC_x86_64_ps5_freebsd="$cc" AR_x86_64_ps5_freebsd="$PS5_PAYLOAD_SDK/bin/prospero-ar"
+# cc-rs (blake3's SIMD assembly, through ps5-dump-forge's readers) passes
+# --target=x86_64-unknown-freebsd-ps5, which clang refuses; a later --target wins, so put the SDK's
+# own target back (as ps5-dump-forge's build.sh does).
+export CFLAGS_x86_64_ps5_freebsd='--target=x86_64-sie-ps5 -mno-red-zone -femulated-tls'
 # Cargo doesn't see the C objects or linker.sh: drop the linked output so a shim change relinks.
 build() {
   rm -f "$out"/x86_64-ps5-freebsd/release/deps/kraken_mount-*

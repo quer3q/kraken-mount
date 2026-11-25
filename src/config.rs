@@ -23,6 +23,10 @@ pub struct Settings {
     pub playgo_off: Vec<String>,
     /// Title ids that get an empty fakelib/ (no overlay at launch: no game fakelib, ampr-emu-ng or emulators).
     pub overlay_off: Vec<String>,
+    /// Title ids of plain folder games that get no ampr-emu-ng even with inject_ampr (their own fakelib
+    /// and the emulators stay). zstd and LZ4 folders and pkg games always get it: they cannot start
+    /// without it. Per title: `ng_folder`.
+    pub ampr_off: Vec<String>,
     pub ampr_auto_update: bool,
     pub backports: bool,
     pub scan_interval_secs: u64,
@@ -49,6 +53,11 @@ pub const UI_SCHEMES: &[&str] = &["abyss", "ember", "moss", "cobalt", "dusk", "r
 pub const UI_LANGS: &[&str] = &["en", "ru", "zh", "de", "es", "fr", "ja", "pt", "it", "ko", "ar"];
 
 impl Settings {
+    /// `inject_ampr` for one plain folder title: off when it is in `ampr_off`. zstd and LZ4 folders
+    /// do not ask: their packs need ampr-emu-ng.
+    pub fn ng_folder(&self, tid: &str) -> bool {
+        self.inject_ampr && !self.ampr_off.iter().any(|t| t == tid)
+    }
     /// `ampr_installed` for one installed title: its override, else the global switch.
     pub fn ng_installed(&self, tid: &str) -> bool {
         if self.ampr_installed_on.iter().any(|t| t == tid) {
@@ -74,6 +83,7 @@ impl Default for Settings {
             add_emulators: true,
             playgo_off: Vec::new(),
             overlay_off: Vec::new(),
+            ampr_off: Vec::new(),
             ampr_auto_update: true,
             backports: true,
             scan_interval_secs: 10,
@@ -104,6 +114,7 @@ const HELP: &[(&str, &str)] = &[
     ("add_emulators", "true = add the bundled DLC (dlc_emu) and PlayGo (pgo_stub) emulators to a game's fakelib when it needs them and ships none (a change only refreshes fakelib/)"),
     ("playgo_off", "title ids that get no bundled PlayGo stub (pgo_stub): not added, not upgraded; a libScePlayGo.sprx the game ships stays (a change only refreshes fakelib/)"),
     ("overlay_off", "title ids (folder and installed games; a pkg game keeps its overlay) that get no fakelib overlay at launch: not the game's fakelib/, not ampr-emu-ng, not the emulators (a change only refreshes fakelib/)"),
+    ("ampr_off", "title ids of plain folder games that get no ampr-emu-ng even with inject_ampr; their own fakelib/ and the emulators stay (zstd/LZ4 folders and pkg games always get it; a change only refreshes fakelib/)"),
     ("ampr_auto_update", "true = once per start, download a newer ampr-emu-ng release from GitHub (a hand-placed libSceAmpr.sprx is kept)"),
     ("backports", "true = apply backports/<TID>* from the game's scan root, then the other roots, then /data/homebrew"),
     ("scan_interval_seconds", "scan loop period, 1..3600"),
@@ -183,6 +194,12 @@ fn set(s: &mut Settings, key: &str, v: &str) -> Result<(), String> {
             }
         }
         "overlay_off" => return Err(format!("expected a title id like PPSA01556, got {v:?}")),
+        "ampr_off" if crate::scan::valid_tid(v) => {
+            if !s.ampr_off.iter().any(|t| t == v) {
+                s.ampr_off.push(v.to_string());
+            }
+        }
+        "ampr_off" => return Err(format!("expected a title id like PPSA01556, got {v:?}")),
         "ampr_auto_update" => s.ampr_auto_update = flag(v)?,
         // Removed setting (the game's fakelib is always used in full): ignored, dropped on the next save.
         "game_fakelib" => {}
@@ -340,6 +357,8 @@ fn parse(text: &str) -> Settings {
                 s.ampr_installed_on.clear();
             } else if k == "ampr_installed_off" {
                 s.ampr_installed_off.clear();
+            } else if k == "ampr_off" {
+                s.ampr_off.clear();
             } else if k == "exclude" {
                 s.exclude.clear();
             } else if vals.len() != 1 {
@@ -394,6 +413,10 @@ fn render(s: &Settings) -> String {
             "overlay_off" => {
                 let items: Vec<String> = s.overlay_off.iter().map(|t| toml_quote(t)).collect();
                 out += &format!("overlay_off = [{}]\n", items.join(", "));
+            }
+            "ampr_off" => {
+                let items: Vec<String> = s.ampr_off.iter().map(|t| toml_quote(t)).collect();
+                out += &format!("ampr_off = [{}]\n", items.join(", "));
             }
             "ampr_auto_update" => out += &format!("{k} = {}\n", s.ampr_auto_update),
             "backports" => out += &format!("{k} = {}\n", s.backports),
@@ -471,6 +494,7 @@ pub fn to_json(s: &Settings) -> Value {
         "add_emulators": s.add_emulators,
         "playgo_off": s.playgo_off,
         "overlay_off": s.overlay_off,
+        "ampr_off": s.ampr_off,
         "ampr_auto_update": s.ampr_auto_update,
         "backports": s.backports,
         "scan_interval_seconds": s.scan_interval_secs,
@@ -494,8 +518,8 @@ pub fn from_json(v: &Value) -> Result<Settings, String> {
     let mut s = Settings::default();
     for (k, val) in obj {
         let vals: Vec<&Value> = match (k.as_str(), val) {
-            ("scanpath" | "exclude" | "playgo_off" | "overlay_off" | "ampr_installed_on" | "ampr_installed_off", Value::Array(a)) => a.iter().collect(),
-            ("scanpath" | "exclude" | "playgo_off" | "overlay_off" | "ampr_installed_on" | "ampr_installed_off", _) => return Err(format!("{k}: expected an array of strings")),
+            ("scanpath" | "exclude" | "playgo_off" | "overlay_off" | "ampr_installed_on" | "ampr_installed_off" | "ampr_off", Value::Array(a)) => a.iter().collect(),
+            ("scanpath" | "exclude" | "playgo_off" | "overlay_off" | "ampr_installed_on" | "ampr_installed_off" | "ampr_off", _) => return Err(format!("{k}: expected an array of strings")),
             _ => vec![val],
         };
         for x in vals {

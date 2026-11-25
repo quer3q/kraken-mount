@@ -17,6 +17,10 @@ libc = "0.2.187"
 serde_json = "1"
 # GET /api/qr: the console's address for a phone (as ps5-dump-forge); no image/svg features (web.rs draws the SVG).
 qrcode = { version = "0.14", default-features = false }
+# Game images (src/image/probe.rs): ps5-dump-forge's readers check an image and read its param.json
+# before it is attached. Pinned to the ps5-dump-forge v0.6.0 commit.
+ps5-dump-forge-pfs = { git = "https://github.com/quer3q/ps5-dump-forge", rev = "1ad9c12215e0e11036b4b72cd21f7e2e6c5ca806" }
+ps5upload-fpkg = { git = "https://github.com/quer3q/ps5-dump-forge", rev = "1ad9c12215e0e11036b4b72cd21f7e2e6c5ca806" }
 
 # Kraken decoding is hot during cache builds.
 [profile.release.package.kraken-mount-pkg]

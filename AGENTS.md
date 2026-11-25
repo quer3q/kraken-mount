@@ -9,7 +9,8 @@ and USB/extended drives, keeps a per-game cache on the internal SSD, registers e
 screen without installing it, and at launch mounts the game's fakelib plus ampr-emu-ng into the game
 sandbox. Web UI on port 8097 (opened from the "Kraken Mount" home-screen tile).
 
-- Sources: debug FPKG `.pkg` files and game folders (plain, zstd or LZ4 AMPR packs), plus games installed on the
+- Sources: debug FPKG `.pkg` files, game folders (plain, zstd or LZ4 AMPR packs) and `.exfat`/`.ffpkg`/`.ffpfs`/`.ffpfsc`
+  images (read by ps5-dump-forge's readers, then mounted read-only as a folder source; `src/image.rs`), plus games installed on the
   console (`/user/app`, extended storage), which are never registered; with `ampr_installed` (per game) an internal
   debug FPKG install runs through ng from its `app.pkg` (cache mounted at `/system_ex/app/<TID>`, no license check). FPKG games and patch/DLC `.pkg` files can be
   installed through the console installer (game sheet Install for FPKG games, Install tab for patch/DLC). Nothing
@@ -31,6 +32,8 @@ sandbox. Web UI on port 8097 (opened from the "Kraken Mount" home-screen tile).
 | `src/config.rs` | `/data/krakenmount/config.toml` settings |
 | `src/storage.rs` | drives and default scan roots |
 | `src/scan.rs` | game discovery, backports, duplicates (rank: installed, FPKG, zstd, LZ4, plain), patch/DLC packages |
+| `src/image.rs` | game images (exFAT, UFS, PFS, PFSC): LVD attach, read-only mount, release |
+| `src/image/probe.rs` | reads an image without attaching it (ps5-dump-forge-pfs, ps5upload-fpkg): its game folder and param.json |
 | `src/installed.rs` | games installed on the console, the `installing/<TID>` markers, the retail check |
 | `src/crash.rs` | crash reports (`crashes.json`), the last crash per title |
 | `src/install.rs` | the install queue and job, the loopback `.pkg` Range server, the installer FFI |
@@ -74,7 +77,8 @@ sandbox. Web UI on port 8097 (opened from the "Kraken Mount" home-screen tile).
 - Pkg-specific behaviour in ng goes behind `pkg_mode()`; zstd/LZ4 behaviour stays unchanged. Pkg perf
   changes need an A/B launch of at least two pkg games, with numbers.
 - Licenses: a dependency added or bumped in `Cargo.lock` gets its license text in `THIRD_PARTY_NOTICES`.
-- Style: smallest correct diff, no new dependencies (approved exception: `qrcode`, no default features, for `GET /api/qr` as in ps5-dump-forge), `ponytail:` comment on deliberate shortcuts and
+- Style: smallest correct diff, no new dependencies (approved exceptions: `qrcode`, no default features, for `GET /api/qr` as in ps5-dump-forge; `ps5-dump-forge-pfs` and
+  `ps5upload-fpkg` from ps5-dump-forge, pinned by git rev, for the image readers), `ponytail:` comment on deliberate shortcuts and
   their limits, errors logged with the title id and path.
 - UI: plain JS + CSS in one file, works on the PS5 browser (old WebKit, D-pad, 1920x1080) and phones;
   no external requests.
