@@ -269,14 +269,15 @@ overwritten (SMP), but get +0444 when a read bit is missing.
 `/system_ex` is read-only unless etaHEN, SMP or kstuff-lite remounted it (elfldr does not): when
 `mkdir -p /system_ex/app/<TID>` fails with EROFS, register remounts it once like SMP `remount_system_ex`
 (`nmount` MNT_UPDATE of `/dev/ssd0.system_ex`) and retries. An existing title dir (EEXIST) needs no remount.
-Title sound (`set_snd0info`, SMP `update_snd0info`): when `/user/appmeta/<TID>/snd0.at9` exists,
-`UPDATE tbl_contentinfo SET snd0info = '/user/appmeta/<TID>/snd0.at9' WHERE titleId = <TID>` (rows
-already pointing there are skipped) in `/system_data/priv/mms/app.db`, through `ps5/appdb.c` and the
-SQLite 3.46.1 amalgamation (opened read-write, never created, busy timeout 3 s, one mutex for both
-threads). Run 200 ms after a successful install call, once per run for a title already registered
-(backfills older registrations), and after each game exit (the system rewrites the path); each runs on its own thread
-(`spawn_snd0info`, the post-install one after the 200 ms), so a busy app.db (up to 3 s) holds neither the scan nor the watcher. Logged
-`<TID>: snd0info set (<n> row(s))` only when a row changed; a failure is logged, never fatal.
+Title sound (`set_snd0info`, `sync_snd0info_if_changed`, SMP `update_snd0info`): when `/user/appmeta/<TID>/snd0.at9` exists,
+`UPDATE tbl_contentinfo SET snd0info = '/user/appmeta/' || ?1 || '/snd0.at9' WHERE titleId = <TID>` (rows
+already pointing there are skipped) in `/system_data/priv/mms/app.db`, through `ps5/appdb.c` (`km_sqlite_exec_many`) and the
+SQLite 3.46.1 amalgamation (opened read-write, never created, busy timeout 3 s, up to 3 attempts with backoff, one mutex across
+threads). Run 200 ms after a successful install call, 1500 ms after game launch, 200 ms after `NOTE_EXIT` and again after cleanup ends
+(the system rewrites the path), plus once per scan pass via `sync_snd0info_if_changed` when `app.db` or `app.db-wal` mtime/size
+changed (single batched connection for all registered titles); each runs on its own thread
+(`spawn_snd0info`, the post-install one after the 200 ms), so a busy app.db holds neither the scan nor the watcher. Logged
+`<label>: snd0info set (<n> row(s))` only when a row changed; a failure is logged, never fatal.
 
 ## Launch (`src/launch.rs`)
 As before (SMP sm_fakelib port): unionfs of `caches/<TID>/fakelib` (when non-empty) over the sandbox's
@@ -380,6 +381,7 @@ pub fn is_registered(title_id: &str) -> bool;
 pub fn registered(tids: &[&str]) -> Vec<bool>;            // is_registered for many, in tids order, one app.db read (all false when unreadable)
 pub fn set_snd0info(title_id: &str);                      // app.db snd0info -> /user/appmeta/<TID>/snd0.at9; logs, never fails
 pub fn spawn_snd0info(title_id: &str, delay_ms: u64);    // set_snd0info on its own thread after delay_ms
+pub fn sync_snd0info_if_changed(tids: &std::collections::HashSet<String>); // batch sync on app.db/wal mtime or size change
 pub fn mount(title_id: &str, app0: &std::path::Path, backport: Option<&std::path::Path>) -> std::io::Result<()>;
 pub fn remount(title_id: &str, app0: &std::path::Path, backport: Option<&std::path::Path>) -> std::io::Result<()>; // moved folder: whole stack
 pub fn unmount_title(tid: &str) -> std::io::Result<()>;   // every layer at /system_ex/app/<TID>, never MNT_FORCE

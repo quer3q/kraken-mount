@@ -13,7 +13,9 @@ use std::io::{self, ErrorKind};
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 const APP_BASE: &str = "/user/app";
 const SYSTEM_EX_APP: &str = "/system_ex/app";
@@ -502,31 +504,120 @@ fn is_ours_in(root: &Path, title_id: &str) -> Result<(), PathBuf> {
 extern "C" {
     /// ps5/appdb.c: one statement with ?1 = `arg`; rows changed, or -1 with the error in `err`.
     fn km_sqlite_exec1(path: *const c_char, sql: *const c_char, arg: *const c_char, err: *mut c_char, errlen: usize) -> i32;
+    /// ps5/appdb.c: one statement across `count` ?1 args on a single connection.
+    fn km_sqlite_exec_many(
+        path: *const c_char,
+        sql: *const c_char,
+        args: *const *const c_char,
+        count: usize,
+        err: *mut c_char,
+        errlen: usize,
+    ) -> i32;
 }
 
 /// The scan thread and the launch watcher both write app.db.
 static APP_DB_LOCK: Mutex<()> = Mutex::new(());
 
+const APP_DB_WAL: &str = "/system_data/priv/mms/app.db-wal";
+const SND0_SQL: &str = "UPDATE tbl_contentinfo SET snd0info = '/user/appmeta/' || ?1 || '/snd0.at9' \
+    WHERE titleId = ?1 AND snd0info IS NOT '/user/appmeta/' || ?1 || '/snd0.at9'";
+
+type DbStamp = (Option<(SystemTime, u64)>, Option<(SystemTime, u64)>);
+static LAST_APP_DB_STAMP: Mutex<Option<DbStamp>> = Mutex::new(None);
+static SND0_SYNCING: AtomicBool = AtomicBool::new(false);
+
+fn file_stamp(p: &str) -> Option<(SystemTime, u64)> {
+    let m = fs::metadata(p).ok()?;
+    Some((m.modified().ok()?, m.len()))
+}
+
+fn app_db_stamp() -> DbStamp {
+    (file_stamp(APP_DB), file_stamp(APP_DB_WAL))
+}
+
+fn exec_snd0info_batch(tids: &[&str], label: &str) -> bool {
+    let c_tids: Vec<CString> = tids
+        .iter()
+        .filter(|tid| Path::new(APPMETA_BASE).join(tid).join("snd0.at9").is_file())
+        .filter_map(|tid| CString::new(*tid).ok())
+        .collect();
+    if c_tids.is_empty() {
+        return true;
+    }
+    let (Ok(path), Ok(sql)) = (CString::new(APP_DB), CString::new(SND0_SQL)) else {
+        return false;
+    };
+    let ptrs: Vec<*const c_char> = c_tids.iter().map(|s| s.as_ptr()).collect();
+    let mut msg = [0 as c_char; 256];
+    let mut last_err = String::new();
+    for delay_ms in [0u64, 350, 700] {
+        if delay_ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+        let rows = {
+            let _guard = APP_DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            unsafe {
+                km_sqlite_exec_many(
+                    path.as_ptr(),
+                    sql.as_ptr(),
+                    ptrs.as_ptr(),
+                    ptrs.len(),
+                    msg.as_mut_ptr(),
+                    msg.len(),
+                )
+            }
+        };
+        if rows >= 0 {
+            if rows > 0 {
+                log!("{label}: snd0info set ({rows} row(s))");
+            }
+            return true;
+        }
+        last_err = unsafe { CStr::from_ptr(msg.as_ptr()) }.to_string_lossy().into_owned();
+    }
+    log!("{label}: snd0info update in {APP_DB} failed: {last_err}");
+    false
+}
+
 /// SMP update_snd0info (sm_appdb.c): point app.db's snd0info at /user/appmeta/<TID>/snd0.at9 so
 /// the home screen plays the title sound. Only when that file exists; errors are logged only.
 pub fn set_snd0info(title_id: &str) {
-    if !Path::new(APPMETA_BASE).join(title_id).join("snd0.at9").is_file() {
+    exec_snd0info_batch(&[title_id], title_id);
+}
+
+/// Checks app.db (and its WAL) mtime/size; if modified since the last sync, spawns one
+/// background pass to restore snd0info for all registered titles in a single connection.
+pub fn sync_snd0info_if_changed(tids: &HashSet<String>) {
+    if tids.is_empty() {
         return;
     }
-    const SQL: &str = "UPDATE tbl_contentinfo SET snd0info = '/user/appmeta/' || ?1 || '/snd0.at9' \
-        WHERE titleId = ?1 AND snd0info IS NOT '/user/appmeta/' || ?1 || '/snd0.at9'";
-    let (Ok(path), Ok(sql), Ok(tid)) = (CString::new(APP_DB), CString::new(SQL), CString::new(title_id)) else {
+    let stamp = app_db_stamp();
+    if *LAST_APP_DB_STAMP.lock().unwrap_or_else(|e| e.into_inner()) == Some(stamp) {
         return;
-    };
-    let mut msg = [0 as c_char; 256];
-    let _guard = APP_DB_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let rows = unsafe { km_sqlite_exec1(path.as_ptr(), sql.as_ptr(), tid.as_ptr(), msg.as_mut_ptr(), msg.len()) };
-    if rows > 0 {
-        log!("{title_id}: snd0info set ({rows} row(s))");
-    } else if rows < 0 {
-        let e = unsafe { CStr::from_ptr(msg.as_ptr()) }.to_string_lossy();
-        log!("{title_id}: snd0info update in {APP_DB} failed: {e}");
     }
+    if SND0_SYNCING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    let list: Vec<String> = tids
+        .iter()
+        .filter(|tid| Path::new(APPMETA_BASE).join(tid).join("snd0.at9").is_file())
+        .cloned()
+        .collect();
+    if list.is_empty() {
+        *LAST_APP_DB_STAMP.lock().unwrap_or_else(|e| e.into_inner()) = Some(stamp);
+        SND0_SYNCING.store(false, Ordering::SeqCst);
+        return;
+    }
+    std::thread::spawn(move || {
+        let refs: Vec<&str> = list.iter().map(String::as_str).collect();
+        if exec_snd0info_batch(&refs, "sync") {
+            *LAST_APP_DB_STAMP.lock().unwrap_or_else(|e| e.into_inner()) = Some(app_db_stamp());
+        }
+        SND0_SYNCING.store(false, Ordering::SeqCst);
+    });
 }
 
 /// True when the title is on the home screen already: /user/app/<TID>/sce_sys/param.json,

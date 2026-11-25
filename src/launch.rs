@@ -867,6 +867,8 @@ impl Watcher {
             if let Err(e) = kevent_add(self.kq, k) {
                 tlog!("{tid} exit watch pid={pid} failed: {e}");
             }
+            // Restore snd0info shortly after launch in case ShellCore rewrote it on startup.
+            crate::register::spawn_snd0info(&tid, 1500);
         }
     }
 
@@ -880,6 +882,8 @@ impl Watcher {
             if !crate::crash::check(&s.tid, pid, &status, "at exit") {
                 s.exits.push((pid, status.clone(), now));
             }
+            // Restore snd0info promptly on exit instead of waiting for EXIT_GRACE_MS (3 s).
+            crate::register::spawn_snd0info(&s.tid, 200);
             // Our nullfs mounts inside the sandbox block ShellCore's teardown (the close hangs, then the
             // console powers off): they go now. Only the overlay waits for an exit-spawned ELF.
             let wait = match s.unmount_data(0) {

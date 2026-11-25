@@ -98,9 +98,6 @@ fn build_and_register(state: &State, s: &Settings, src: &Source, fresh: &Fresh, 
         // reboot; a no-op when mounted): no sce_sys copy, no install call.
         cache::fix_access(src);
         register::mount(tid, &app0, backport_of(src))?;
-        // Backfills titles registered before snd0info was written, and resets a rewritten path;
-        // off the scan thread (and the work lock): a busy app.db waits up to 3 s.
-        register::spawn_snd0info(tid, 0);
         return Ok(Reg::Kept);
     }
     if stale {
@@ -879,6 +876,7 @@ fn main() {
         // app.db row keeps the old version and name until its next full register.
         if !state.paused() {
             install_staged(&state, &s, &mut staged, &mut registered, &mut failed);
+            register::sync_snd0info_if_changed(&registered);
         }
         if full_pass && full && !state.paused() {
             auto_remove(&state, &s, &r, &mut timers, t0.elapsed().as_secs());
