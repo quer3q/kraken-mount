@@ -61,23 +61,29 @@ only into a cache's `fakelib/`, never into `/data/krakenmount/ampr/`.
 - `.ffpfsc`: the container is mounted, then the inner image the probe named, in that mount (`pfs_image.dat`
   or a name without a known extension is PFS, `.ufs2` is UFS). The game folder is in that inner mount.
 - After the mount, the probe's game folder must hold `eboot.bin` + `sce_sys/param.json`; else (the reader
-  and the filesystem disagree) the image's mounts are released and it is a scan error.
+  and the filesystem disagree) the image's mounts are released and it is a scan error. Any failed mount
+  (that one, an attach or nmount error, a `.ffpfsc` whose inner image does not mount) releases what it
+  attached and is remembered per (path, size, mtime): the same file is not attached again for 10 minutes
+  (the same scan error is reported meanwhile); a changed file is tried at once.
 - `/data/krakenmount/images/<mount name>` = `<unit>\n<image path>`: a later copy of the payload reuses a
   live mount of the same image; a dead one (drive unplugged) or someone else's at that path is released
   and mounted again.
 - Scan: an image still being written (stability) is neither probed nor attached; its title id is that of a
-  cache whose stamp source is in its mount point.
+  cache whose stamp source is in its mount point. An image whose title id is already held by a source it
+  cannot beat (claim's rule; its packing read from the probe: `ampr_zstd.index` / `ampr_assets.index` in the
+  game folder) is a duplicate without being attached (`Source.path` = where its folder would be mounted).
 - Release (`image::release_unused`, every pass after the scan, before the games are processed; a mount under a
   running title's `/system_ex/app/<TID>` stack, or holding such an inner image, stays: a running homebrew's title
   is never touched): every
-  mount of ours not used by a game (its image mount and the mount of its folder), duplicate, unstable image
+  mount of ours not used by a game (its image mount and the mount of its folder), non-image duplicate, unstable image
   or scan error of this pass, nor holding such a mount, is released by `image::release_tree`: the images
   mounted from inside it first, then the `/system_ex/app/<TID>` stacks on it (`register::unmount_title`,
   never MNT_FORCE), then unmount (never MNT_FORCE), LVD detach (`0xC0286D01`), state file and dir removed.
   The unit detached is the live mount's `/dev/lvdN`, or the recorded one for a dead mount (still in the mount
   table, so attached this boot). Nothing mounted there: the record may predate a reboot (its unit now another
   image's or the system's), so it is dropped without a detach.
-  Busy = logged, retried next pass. So a moved image's cache sees its old folder gone and relinks (`Fresh::Moved`).
+  Busy = logged, retried next pass. So a moved image's cache sees its old folder gone and relinks (`Fresh::Moved`),
+  and an image that loses its title to a later source is released.
 - Eject: the image mounts whose image is on the drive are released (`release_tree`) before the IPMI eject.
 - `/app0` of an image game is read-only (writes fail with EROFS), as in SMP's default `read_only`.
   `fix_access` skips the image tree (chmod cannot succeed there). Web: `"image"` in a game's JSON, the

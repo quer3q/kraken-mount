@@ -24,6 +24,10 @@ pub struct Probe {
     pub param: Vec<u8>,
     /// For a `.ffpfsc`: the name of the one image in its root (`PPSA01234.exfat`, `pfs_image.dat`).
     pub inner: Option<String>,
+    /// The game folder has `ampr_zstd.index` / `ampr_assets.index` (scan::packing, read from the
+    /// image): its rank is known before it is attached.
+    pub zstd: bool,
+    pub lz4: bool,
 }
 
 /// The game folder in a tree's file list: its root, else the first such folder directly inside it.
@@ -72,7 +76,10 @@ fn read(image: &Path, fs: Fs) -> io::Result<Probe> {
         return Err(bad(format!("{param_path}: {size} bytes")));
     }
     let param = tree.read(&param_path).map_err(|e| bad(format!("{param_path}: {e}")))?;
-    Ok(Probe { game, param, inner })
+    let prefix = if game.is_empty() { String::new() } else { format!("{game}/") };
+    let has = |name: &str| files.iter().any(|f| *f == format!("{prefix}{name}"));
+    let (zstd, lz4) = (has("ampr_zstd.index"), has("ampr_assets.index"));
+    Ok(Probe { game, param, inner, zstd, lz4 })
 }
 
 type Key = (PathBuf, u64, i64);

@@ -9,12 +9,14 @@ mod probe;
 
 pub use probe::Probe;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::CString;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 pub const MOUNT_BASE: &str = "/mnt/krakenmount";
 const STATE_DIR: &str = "/data/krakenmount/images";
@@ -192,10 +194,53 @@ fn inner_fs(name: &str) -> Fs {
     if lower.ends_with(".ufs2") { Fs::Ufs } else { fs_of(Path::new(&lower)).filter(|f| *f != Fs::Pfsc).unwrap_or(Fs::Pfs) }
 }
 
+/// The game folder `ensure` returns for `image`, from the paths alone (nothing is attached).
+pub fn dir_of(image: &Path, p: &Probe) -> PathBuf {
+    let mp = mount_point(image);
+    let mp = match &p.inner {
+        Some(name) => mount_point(&mp.join(name)),
+        None => mp,
+    };
+    if p.game.is_empty() { mp } else { mp.join(&p.game) }
+}
+
+type Key = (PathBuf, u64, i64);
+
+/// Images whose mount failed, per (path, size, mtime): not attached again every scan pass (a
+/// `.ffpfsc` whose inner image does not mount had its container attached and released each pass).
+/// A changed file tries again at once, the same file after RETRY_FAILED (a busy LVD unit, a drive
+/// replugged mid-attach).
+static FAILED: OnceLock<Mutex<HashMap<Key, (Instant, ErrorKind, String)>>> = OnceLock::new();
+const RETRY_FAILED: Duration = Duration::from_secs(10 * 60);
+
+/// `ensure`, once per version of the file while it fails (FAILED).
+pub fn ensure(image: &Path, p: &Probe) -> io::Result<PathBuf> {
+    let meta = fs::metadata(image)?;
+    let key = (image.to_path_buf(), meta.len(), meta.mtime());
+    let failed = FAILED.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some((at, k, m)) = failed.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
+        if at.elapsed() < RETRY_FAILED {
+            return Err(Error::new(*k, m.clone()));
+        }
+    }
+    let r = ensure_mounted(image, p);
+    let mut failed = failed.lock().unwrap_or_else(|e| e.into_inner());
+    failed.retain(|k, _| k.0 != key.0);
+    if let Err(e) = &r {
+        // What the failed attempt left (the container of a `.ffpfsc`) is released now, not by
+        // release_unused: the error keeps no mount.
+        if let Err(r) = release_tree(&mount_point(image), &[]) {
+            log!("{}: release: {r}", image.display());
+        }
+        failed.insert(key, (Instant::now(), e.kind(), e.to_string()));
+    }
+    r
+}
+
 /// Mounts `image` (read by `probe` as `p`) when it is not mounted yet and returns its game folder.
 /// An existing mount of this image (this run or an earlier copy of the payload) is reused; a dead
 /// one (its drive was unplugged) is released first. A `.ffpfsc` mounts its inner image too.
-pub fn ensure(image: &Path, p: &Probe) -> io::Result<PathBuf> {
+fn ensure_mounted(image: &Path, p: &Probe) -> io::Result<PathBuf> {
     let fs = fs_of(image).ok_or_else(|| Error::new(ErrorKind::InvalidInput, "not an image"))?;
     let mp = mount_as(image, fs)?;
     let (mp, fs) = match &p.inner {
@@ -210,12 +255,8 @@ pub fn ensure(image: &Path, p: &Probe) -> io::Result<PathBuf> {
     if dir.join("eboot.bin").is_file() && dir.join("sce_sys/param.json").is_file() {
         return Ok(dir);
     }
-    // The reader and the mounted filesystem disagree: nothing of it is kept.
-    let e = Error::new(ErrorKind::InvalidData, format!("{} ({fs:?}): no eboot.bin + sce_sys/param.json in {}", image.display(), dir.display()));
-    if let Err(r) = release_tree(&mount_point(image), &[]) {
-        log!("{}: release: {r}", image.display());
-    }
-    Err(e)
+    // The reader and the mounted filesystem disagree: nothing of it is kept (ensure releases it).
+    Err(Error::new(ErrorKind::InvalidData, format!("{} ({fs:?}): no eboot.bin + sce_sys/param.json in {}", image.display(), dir.display())))
 }
 
 /// The mount of `image` as `fs`, mounted when missing (see `ensure`).
