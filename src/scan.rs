@@ -594,6 +594,20 @@ pub fn scan(roots: &[String], exclude: &[String], backports: bool, stability_wai
                     continue;
                 }
             };
+            // A copy that already loses its title id (an installed game, a pkg, an earlier root) is
+            // not attached: a duplicate image stays a file until it can win (claim's rule, with the
+            // packing read from the image).
+            let kind = Kind::Folder(if probe.zstd { Packing::Zstd } else if probe.lz4 { Packing::Lz4 } else { Packing::Plain });
+            let (tid, title_name, version) = &param;
+            if valid_tid(tid) && seen.get(tid).is_some_and(|&(held, _)| nested || rank(kind) >= held) {
+                result.duplicates.push(Source {
+                    drive: crate::storage::drive_of(&path),
+                    backport: if backports { backport_for(root, roots, tid) } else { None },
+                    path: crate::image::dir_of(&path, &probe), kind, title_id: tid.clone(),
+                    title_name: title_name.clone(), version: version.clone(), size: metadata.len(), image: Some(path),
+                });
+                continue;
+            }
             let dir = match crate::image::ensure(&path, &probe) {
                 Ok(dir) => dir,
                 Err(e) => {

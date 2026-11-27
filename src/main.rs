@@ -1051,7 +1051,8 @@ fn main() {
         // before the games are processed, so a moved image's title sees its old folder gone (Moved).
         // A scan error on a path inside a mount (an image found inside an image) keeps that mount too.
         // A .ffpfsc game keeps both its container mount (image) and its inner mount (path).
-        let keep: HashSet<PathBuf> = r.games.iter().chain(&r.duplicates)
+        // A duplicate image keeps no mount: one attached while it still won is released here.
+        let keep: HashSet<PathBuf> = r.games.iter().chain(r.duplicates.iter().filter(|d| d.image.is_none()))
             .flat_map(|g| [g.image.as_deref().map(image::mount_point), image::mount_of(&g.path)])
             .flatten()
             .chain(r.unstable.iter().map(|(p, _)| p.as_path()).filter(|p| image::is_image(p)).map(image::mount_point))
